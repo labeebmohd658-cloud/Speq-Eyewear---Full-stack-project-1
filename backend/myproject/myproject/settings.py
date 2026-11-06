@@ -10,10 +10,41 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build the base directory path.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from the .env file.
+load_dotenv(BASE_DIR / ".env")
+
+# Read the Google Client ID from the environment.
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+
+# Ensure Google OAuth Client ID is configured.
+if not GOOGLE_CLIENT_ID:
+    raise ImproperlyConfigured(
+        "GOOGLE_CLIENT_ID is missing from the environment"
+    )
+
+# Read Cloudinary credentials from environment variables.
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")
+
+# Ensure all Cloudinary credentials are configured.
+if not all([
+    CLOUDINARY_CLOUD_NAME,
+    CLOUDINARY_API_KEY,
+    CLOUDINARY_API_SECRET,
+]):
+    raise ImproperlyConfigured(
+        "Cloudinary credentials are missing from the environment"
+    )
+
 
 
 # Quick-start development settings - unsuitable for production
@@ -25,7 +56,11 @@ SECRET_KEY = 'django-insecure-=4h$y*k!i-yy!lzxzdy7_=d8=a4s%vo#v8*299qr08xzim8nof
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
+    "vb5k1g6z-8000.inc1.devtunnels.ms",
+]
 
 
 # Application definition
@@ -44,6 +79,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -51,6 +87,12 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://vb5k1g6z-5173.inc1.devtunnels.ms",
 ]
 
 ROOT_URLCONF = 'myproject.urls'
@@ -139,19 +181,42 @@ MAILERS = {
 
 AUTH_USER_MODEL = "myapp.User"
 
-# Email configuration for development
+# Custom User Model
+AUTH_USER_MODEL = "myapp.User"
+
+
+# Brevo SMTP Email Configuration
 MAILERS = {
     "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "OPTIONS": {
+            "host": os.getenv("EMAIL_HOST"),
+            "port": int(os.getenv("EMAIL_PORT", "587")),
+            "username": os.getenv("EMAIL_HOST_USER"),
+            "password": os.getenv("EMAIL_HOST_PASSWORD"),
+            "use_tls": os.getenv("EMAIL_USE_TLS", "True").lower() == "true",
+        },
     },
 }
 
-DEFAULT_FROM_EMAIL = "speq658@gmail.com"
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
 
-EMAIL_OTP_EXPIRY_MINUTES = 5
+
+# OTP Expiry Time
+EMAIL_OTP_EXPIRY_MINUTES = 1
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES":[
-        "rest_framework_simplejwt.authentication.JWTAuthentication"
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "myapp.authentication.CustomJWTAuthentication",
     ],
+}
+
+GOOGLE_CLIENT_ID = os.environ.get("279982570548-p37tb50hvg6b1o1n6v8d96cacf7m8f3t.apps.googleusercontent.com")
+
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,
 }

@@ -1,0 +1,354 @@
+
+/* RECOVERY MODAL OVERLAY */
+.recovery-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(35, 31, 26, 0.48);
+  backdrop-filter: blur(7px);
+}
+
+/* MODAL CARD */
+.recovery-modal {
+  position: relative;
+  width: 100%;
+  max-width: 510px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 42px 46px 30px;
+  background: #FFFEFA;
+  border-radius: 5px;
+  box-shadow: 0 20px 65px rgba(35, 31, 26, 0.18);
+  color: #3B342B;
+}
+
+/* TOP BADGE */
+.recovery-badge {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 30px;
+}
+
+.recovery-badge span {
+  padding: 8px 14px;
+  border-radius: 30px;
+  background: #F3EDE2;
+  color: #81776B;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+/* WATERMARK */
+.recovery-watermark {
+  position: absolute;
+  top: 27px;
+  right: 28px;
+  color: #EAE3D8;
+  font-family: Georgia, serif;
+  font-size: 17px;
+  letter-spacing: 3px;
+}
+
+/* CLOSE BUTTON */
+.recovery-close {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  background: transparent;
+  color: #81776B;
+  cursor: pointer;
+}
+
+/* CENTER ICON */
+.recovery-icon {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #F3EDE2;
+  color: #8D704D;
+}
+
+/* HEADING */
+.recovery-heading {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.recovery-heading h2 {
+  margin: 0 0 12px;
+  font-family: Georgia, serif;
+  font-size: 29px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.recovery-heading p {
+  max-width: 350px;
+  margin: 0 auto;
+  color: #81776B;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+/* EMAIL LABEL */
+.recovery-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.recovery-label label,
+.recovery-label span {
+  color: #81776B;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+
+.recovery-label span {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* EMAIL INPUT */
+.recovery-input {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 15px;
+  background: #F3EDE2;
+  color: #8D704D;
+  border-radius: 3px;
+}
+
+.recovery-input input {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #3B342B;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.recovery-input input::placeholder {
+  color: #A99F92;
+}
+
+/* BUTTONS */
+.recovery-submit {
+  width: 100%;
+  min-height: 50px;
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: none;
+  border-radius: 3px;
+  background: #3B342B;
+  color: #FFFEFA;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+
+.recovery-submit:hover {
+  background: #8D704D;
+}
+
+/* OTP SECTION */
+.recovery-otp-section {
+  margin-top: 28px;
+}
+
+.recovery-divider {
+  height: 1px;
+  margin-bottom: 25px;
+  background: #EAE3D8;
+}
+
+.recovery-otp-section h3 {
+  margin: 0 0 20px;
+  text-align: center;
+  font-family: Georgia, serif;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+/* OTP INPUTS */
+.recovery-otp-inputs {
+  display: flex;
+  justify-content: center;
+  gap: 9px;
+}
+
+.recovery-otp-inputs input {
+  width: 43px;
+  height: 48px;
+  padding: 0;
+  border: 1px solid #EAE3D8;
+  border-radius: 3px;
+  outline: none;
+  background: #F3EDE2;
+  color: #3B342B;
+  text-align: center;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.recovery-otp-inputs input:focus {
+  background: #FFFEFA;
+  border-color: #A88962;
+  box-shadow: 0 3px 12px rgba(168, 137, 98, 0.15);
+}
+
+/* TIMER AND RESEND */
+.recovery-timer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 17px;
+  color: #81776B;
+  font-size: 10px;
+}
+
+.recovery-timer span,
+.recovery-timer button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recovery-timer button {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #8D704D;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.recovery-timer button:disabled {
+  color: #B8AEA1;
+  cursor: not-allowed;
+}
+
+/* BACK TO LOGIN */
+.recovery-back {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 3px;
+  background: #F3EDE2;
+  color: #81776B;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+}
+
+.recovery-back:hover {
+  background: #EAE3D8;
+}
+
+/* RESPONSIVE */
+@media (max-width: 550px) {
+  .recovery-overlay {
+    padding: 12px;
+  }
+
+  .recovery-modal {
+    padding: 38px 22px 24px;
+  }
+
+  .recovery-heading h2 {
+    font-size: 24px;
+  }
+
+  .recovery-otp-inputs {
+    gap: 6px;
+  }
+
+  .recovery-otp-inputs input {
+    width: 39px;
+    height: 44px;
+  }
+}
+.recovery-error {
+  color: #b42318;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.recovery-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.recovery-otp-description {
+  margin: 8px 0 18px;
+  color: #81776B;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.recovery-otp-inputs {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.recovery-otp-inputs input {
+  width: 48px;
+  height: 52px;
+  box-sizing: border-box;
+  border: 1px solid #EAE3D8;
+  border-radius: 4px;
+  background: #F3EDE2;
+  color: #3B342B;
+  font-size: 20px;
+  font-weight: 600;
+  text-align: center;
+  outline: none;
+}
+
+.recovery-otp-inputs input:focus {
+  border-color: #A88962;
+  background: #FFFEFA;
+  box-shadow: 0 3px 12px rgba(168, 137, 98, 0.15);
+}
+
+@media (max-width: 400px) {
+  .recovery-otp-inputs {
+    gap: 6px;
+  }
+
+  .recovery-otp-inputs input {
+    width: 40px;
+    height: 46px;
+  }
+}
