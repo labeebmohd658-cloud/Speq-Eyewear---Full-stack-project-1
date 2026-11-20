@@ -2,11 +2,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import {
-
   UserRound,
   ChevronLeft,
   ChevronRight,
   ArrowUpRight,
+  ShoppingCart,
+  Heart,
 } from "lucide-react";
 import "./Landing.css";
 import DepthText from "../components/ui/DepthText";
@@ -52,7 +53,6 @@ const heroSlides = [
 ];
 
 // Category images and presentation details stay in the frontend.
-// The category name and slug come from the backend.
 const categoryPresentation = {
   sunglasses: {
     subtitle: "Bold. Iconic. You.",
@@ -66,7 +66,7 @@ const categoryPresentation = {
       "https://images.unsplash.com/photo-1574258495973-f010dfbb5371?auto=format&fit=crop&w=1000&q=90",
     tag: "OPTICAL COLLECTION",
   },
-  "screenglasses": {
+  screenglasses: {
     subtitle: "For your digital life.",
     image:
       "https://images.unsplash.com/photo-1508296695146-257a814070b4?auto=format&fit=crop&w=1000&q=90",
@@ -125,8 +125,6 @@ const frameShapes = [
   },
 ];
 
-
-
 const FrameIllustration = ({ type }) => {
   const illustrations = {
     rectangle: (
@@ -180,8 +178,6 @@ const FrameIllustration = ({ type }) => {
   );
 };
 
-
-
 const Landing = () => {
   // Hero carousel state.
   const [activeSlide, setActiveSlide] = useState(0);
@@ -193,8 +189,7 @@ const Landing = () => {
   const [collections, setCollections] = useState([]);
   const [occasions, setOccasions] = useState([]);
 
-  // Separate loading and error states so one failed endpoint
-  // does not prevent the other catalog sections from appearing.
+  // Separate loading and error states.
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogErrors, setCatalogErrors] = useState({
     categories: "",
@@ -292,7 +287,7 @@ const Landing = () => {
     if (!displayedCategories.length) return;
 
     setActiveCategory((current) =>
-      current === 0 ? displayedCategories.length - 1 : current - 1,
+      current === 0 ? displayedCategories.length - 1 : current - 1
     );
   };
 
@@ -300,7 +295,9 @@ const Landing = () => {
   const showNextCategory = () => {
     if (!displayedCategories.length) return;
 
-    setActiveCategory((current) => (current + 1) % displayedCategories.length);
+    setActiveCategory(
+      (current) => (current + 1) % displayedCategories.length
+    );
   };
 
   // Record where the user starts dragging.
@@ -342,7 +339,7 @@ const Landing = () => {
   // Automatically rotate categories every 4.5 seconds.
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
+      "(prefers-reduced-motion: reduce)"
     ).matches;
 
     if (
@@ -355,7 +352,7 @@ const Landing = () => {
 
     const timer = window.setInterval(() => {
       setActiveCategory(
-        (current) => (current + 1) % displayedCategories.length,
+        (current) => (current + 1) % displayedCategories.length
       );
     }, 4500);
 
@@ -371,18 +368,22 @@ const Landing = () => {
   };
 
   const showPrevious = () => {
-    changeSlide(activeSlide === 0 ? heroSlides.length - 1 : activeSlide - 1);
+    changeSlide(
+      activeSlide === 0 ? heroSlides.length - 1 : activeSlide - 1
+    );
   };
 
   const showNext = () => {
-    changeSlide(activeSlide === heroSlides.length - 1 ? 0 : activeSlide + 1);
+    changeSlide(
+      activeSlide === heroSlides.length - 1 ? 0 : activeSlide + 1
+    );
   };
 
   const currentSlide = heroSlides[activeSlide];
 
   // Store the user's login status.
   const [isLoggedIn, setIsLoggedIn] = useState(
-    Boolean(localStorage.getItem("access")),
+    Boolean(localStorage.getItem("access"))
   );
 
   // Update login status when browser storage changes.
@@ -403,7 +404,7 @@ const Landing = () => {
   // Automatically rotate hero slides.
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
+      "(prefers-reduced-motion: reduce)"
     ).matches;
 
     if (isHeroPaused || prefersReducedMotion) return undefined;
@@ -421,13 +422,15 @@ const Landing = () => {
       {/* NAVBAR */}
       <header className="landing-header">
         <nav className="main-nav">
+          {/* LEFT SIDE: DISCOVER PRODUCTS */}
           <div className="nav-left">
-            <a href="#categories">Boutique</a>
-            <a href="#categories">Optical</a>
-            <a href="#categories">Sunwear</a>
-            <a href="#brands">Atelier</a>
+            <Link to="/products" className="nav-discover-button">
+              Discover Products
+              <ArrowUpRight size={16} />
+            </Link>
           </div>
 
+          {/* CENTER: BRAND LOGO */}
           <Link to="/" className="brand-logo">
             <DepthText
               text="SpeQ"
@@ -446,28 +449,47 @@ const Landing = () => {
             <small>ATELIER OPTICAL / EYEWEAR</small>
           </Link>
 
+          {/* RIGHT SIDE: WISHLIST, CART AND ACCOUNT */}
           <div className="nav-right">
-
-
             <div className="nav-actions">
+              <Link
+                to="/wishlist"
+                className="nav-icon-link"
+                aria-label="Wishlist"
+                title="Wishlist"
+              >
+                <Heart size={21} strokeWidth={1.8} />
+              </Link>
+
+              <Link
+                to="/cart"
+                className="nav-icon-link"
+                aria-label="Shopping cart"
+                title="Shopping cart"
+              >
+                <ShoppingCart size={21} strokeWidth={1.8} />
+              </Link>
+
               {isLoggedIn ? (
                 <Link
                   to="/profile"
-                  className="profile-link"
+                  className="profile-link nav-icon-link"
                   aria-label="User profile"
                   title="User profile"
                 >
-                  <UserRound size={34} strokeWidth={2.8} />
+                  <UserRound size={23} strokeWidth={1.8} />
                 </Link>
               ) : (
-                <Link to="/login">Sign In</Link>
+                <Link to="/login" className="nav-sign-in">
+                  Sign In
+                </Link>
               )}
             </div>
           </div>
         </nav>
       </header>
 
-      {/* HERO CAROUSEL - UNCHANGED */}
+      {/* HERO CAROUSEL */}
       <section
         className="hero-section"
         aria-label="SpeQ featured collections"
@@ -526,16 +548,16 @@ const Landing = () => {
 
             <p>{currentSlide.description}</p>
 
-            <a href="#categories" className="hero-appointment">
-              BY ATELIER APPOINTMENT <ArrowUpRight size={15} />
-            </a>
+            <Link to="/products" className="hero-appointment">
+              DISCOVER EYEWEAR <ArrowUpRight size={15} />
+            </Link>
           </div>
 
           <div className="hero-product-card">
             <span className="product-card-label">{currentSlide.product}</span>
             <h3>{currentSlide.frame}</h3>
 
-            <Link to="/signup" className="discover-button">
+            <Link to="/products" className="discover-button">
               DISCOVER NOW <ArrowUpRight size={16} />
             </Link>
           </div>
@@ -571,7 +593,9 @@ const Landing = () => {
       <section className="categories-section" id="categories">
         <div className="section-heading">
           <div>
-            <span className="section-eyebrow">IMAGE REGISTRY / SELECTIONS</span>
+            <span className="section-eyebrow">
+              IMAGE REGISTRY / SELECTIONS
+            </span>
             <h2>Top Categories</h2>
           </div>
 
@@ -670,9 +694,7 @@ const Landing = () => {
             {displayedCategories.length > 1 && (
               <div className="category-carousel-footer">
                 <p className="category-carousel-count">
-                  <strong>
-                    0{activeCategory + 1}
-                  </strong>
+                  <strong>0{activeCategory + 1}</strong>
                   <span>/ 0{displayedCategories.length}</span>
                   <span className="category-carousel-hint">
                     DRAG OR SWIPE TO EXPLORE
@@ -811,7 +833,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* FIND YOUR SHAPE - LINKS TO PRODUCT FILTER */}
+      {/* FIND YOUR SHAPE */}
       <section className="shapes-section" id="shapes">
         <div className="shapes-heading">
           <span className="section-eyebrow">
@@ -819,8 +841,8 @@ const Landing = () => {
           </span>
           <h2>Find your shape</h2>
           <p>
-            Every face has its own character. Discover the frame silhouette that
-            complements yours.
+            Every face has its own character. Discover the frame silhouette
+            that complements yours.
           </p>
         </div>
 
@@ -851,7 +873,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* VIRTUAL TRY-ON - UNCHANGED */}
+      {/* VIRTUAL TRY-ON */}
       <section className="w-full bg-[#EAF2F8] pb-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="group relative mx-auto aspect-square w-full max-w-3xl overflow-hidden rounded-[2.5rem] border border-white/60 shadow-2xl">
@@ -873,20 +895,20 @@ const Landing = () => {
               </h2>
 
               <p className="mt-5 max-w-lg text-sm leading-relaxed text-white/80 md:text-base">
-                Discover your perfect look. Experience your favourite frames in
-                a whole new way.
+                Discover your perfect look. Experience your favourite frames
+                in a whole new way.
               </p>
 
-              <a
-                href="#categories"
+              <Link
+                to="/products"
                 className="mt-9 inline-flex items-center gap-3 rounded-full border border-[#C5AE87] bg-transparent px-8 py-4 text-xs font-bold uppercase tracking-[0.2em] text-[#C5AE87] transition-all duration-300 hover:bg-[#C5AE87] hover:text-[#172B3A] hover:shadow-[0_0_20px_rgba(197,174,135,0.4)]"
               >
-                Start Virtual Try-On
+                Discover Frames
                 <ArrowUpRight
                   size={17}
                   className="transition-transform duration-300 group-hover:translate-x-1"
                 />
-              </a>
+              </Link>
             </div>
           </div>
         </div>
@@ -971,9 +993,7 @@ const Landing = () => {
         </div>
       </section>
 
-
-
-      {/* CONTACT & CONCIERGE - UNCHANGED */}
+      {/* CONTACT & CONCIERGE */}
       <section className="concierge-section">
         <div className="concierge-heading">
           <span>PERSONAL SERVICE / SPEQ ATELIER</span>
@@ -1008,7 +1028,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* FOOTER - UNCHANGED */}
+      {/* FOOTER */}
       <footer className="speq-footer">
         <div className="footer-main">
           <div className="footer-brand">
@@ -1048,7 +1068,9 @@ const Landing = () => {
         </div>
 
         <div className="footer-bottom">
-          <p>© {new Date().getFullYear()} SPEQ EYEWEAR. ALL RIGHTS RESERVED.</p>
+          <p>
+            © {new Date().getFullYear()} SPEQ EYEWEAR. ALL RIGHTS RESERVED.
+          </p>
 
           <div className="footer-legal">
             <Link to="/">PRIVACY POLICY</Link>
