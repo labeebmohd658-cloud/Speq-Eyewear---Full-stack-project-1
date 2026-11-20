@@ -8,7 +8,6 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
-
 from .models import EmailOTP
 
 
@@ -64,8 +63,8 @@ def generate_and_send_otp(
             is_used=False,
         ).update(is_used=True)
 
-        # Save the new OTP.
-        EmailOTP.objects.create(
+        # Save the new OTP and capture the database object.
+        otp_record = EmailOTP.objects.create(
             user=user,
             otp_hash=otp_hash,
             purpose=purpose,
@@ -87,3 +86,6 @@ def generate_and_send_otp(
             recipient_list=[recipient_email],
             fail_silently=False,
         )
+
+    # Return the original expiry timestamp.
+    return otp_record.expires_at

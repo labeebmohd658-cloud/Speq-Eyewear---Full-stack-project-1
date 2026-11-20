@@ -1,15 +1,16 @@
-
 # Python built-in modules
+import re
 import secrets
 from datetime import timedelta
 
-# Django authentication
-from django.contrib.auth import authenticate
+# Django authentication and password utilities
+from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 # Django utilities
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -19,14 +20,10 @@ from rest_framework import serializers
 # Simple JWT
 from rest_framework_simplejwt.tokens import RefreshToken
 
-# Project models
-from myapp.models import User, EmailOTP
-
-import re
-
-# OTP utility
+# Project models and utilities
+from myapp.models import EmailOTP
 from myapp.utils import generate_and_send_otp
-from django.contrib.auth import get_user_model
+
 
 User = get_user_model()
 
@@ -43,38 +40,42 @@ class AdminLoginSerializer(serializers.Serializer):
             user = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
             raise serializers.ValidationError(
-                "Invalid email or password"
+                "Invalid email or password."
             )
 
         from django.contrib.auth import authenticate
 
         user = authenticate(
             username=user.username,
-            password=password
+            password=password,
         )
 
         if user is None:
             raise serializers.ValidationError(
-                "Invalid email or password"
+                "Invalid email or password."
             )
 
         if not user.is_active:
             raise serializers.ValidationError(
-                "This account is inactive"
+                "This account is inactive."
             )
 
         if not user.is_staff:
             raise serializers.ValidationError(
-                "You do not have admin access"
+                "You do not have admin access."
+            )
+
+        if user.is_blocked:
+            raise serializers.ValidationError(
+                "Your admin account has been blocked."
             )
 
         data["user"] = user
         return data
 
     def create(self, validated_data):
-        from rest_framework_simplejwt.tokens import RefreshToken
-
         user = validated_data["user"]
+
         refresh = RefreshToken.for_user(user)
 
         return {
@@ -85,6 +86,7 @@ class AdminLoginSerializer(serializers.Serializer):
 
 
 class AdminUserListSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = User
         fields = [
@@ -99,9 +101,13 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "blocked_at",
         ]
 
+
+# --------------------------------------------------
+# ADMIN FORGOT PASSWORD
+# --------------------------------------------------
+
 class AdminForgotPasswordSerializer(serializers.Serializer):
 
-    # Accept the admin email address.
     email = serializers.EmailField(
         error_messages={
             "required": "Please enter your email address.",
@@ -109,9 +115,7 @@ class AdminForgotPasswordSerializer(serializers.Serializer):
         }
     )
 
-    # Find an eligible admin account.
     def validate_email(self, value):
-
         value = value.strip().lower()
 
         self.user = User.objects.filter(
@@ -123,35 +127,51 @@ class AdminForgotPasswordSerializer(serializers.Serializer):
 
         return value
 
-    # Generate an admin-specific password-reset OTP.
     def create(self, validated_data):
 
-        # Generate OTP only if an eligible admin account exists.
+        email = validated_data["email"]
+
         if self.user:
 
-            generate_and_send_otp(
+            # Generate OTP and get its actual expiry timestamp.
+            expires_at = generate_and_send_otp(
                 user=self.user,
                 purpose="admin_password_reset",
             )
 
-        # Return the same response whether the account exists or not.
+        else:
+
+            # Keep the response structure consistent so the API
+            # does not reveal whether an admin account exists.
+            expires_at = (
+                timezone.now()
+                + timedelta(
+                    minutes=settings.EMAIL_OTP_EXPIRY_MINUTES
+                )
+            )
+
         return {
             "message": (
                 "If an eligible admin account exists, "
                 "a password reset OTP will be sent."
-            )
+            ),
+            "email": email,
+            "expires_at": expires_at.isoformat(),
         }
+
+
+# --------------------------------------------------
+# ADMIN VERIFY PASSWORD RESET OTP
+# --------------------------------------------------
 
 class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
 
-    # Admin email address.
     email = serializers.EmailField()
 
-    # Accept exactly six numeric digits.
     otp = serializers.RegexField(
         regex=r"^\d{6}$",
         error_messages={
-            "invalid": "OTP must contain exactly 6 digits."
+            "invalid": "OTP must contain exactly 6 digits.",
         },
     )
 
@@ -162,6 +182,7 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
 
         otp_error = None
         reset_token = None
+        reset_token_expires_at = None
 
         with transaction.atomic():
 
@@ -175,7 +196,7 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
 
             if user is None:
                 raise serializers.ValidationError({
-                    "email": "Invalid admin account."
+                    "email": "Invalid admin account.",
                 })
 
             # Find the latest valid admin password-reset OTP.
@@ -193,7 +214,7 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
 
             if otp_record is None:
                 raise serializers.ValidationError({
-                    "otp": "Invalid or expired password reset OTP."
+                    "otp": "Invalid or expired password reset OTP.",
                 })
 
             # Stop verification after five failed attempts.
@@ -202,10 +223,15 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
                 otp_record.is_used = True
                 otp_record.save(update_fields=["is_used"])
 
-                otp_error = "Maximum attempts reached. Request a new OTP."
+                otp_error = (
+                    "Maximum attempts reached. Request a new OTP."
+                )
 
             # Compare submitted OTP with the stored hash.
-            elif not check_password(otp, otp_record.otp_hash):
+            elif not check_password(
+                otp,
+                otp_record.otp_hash,
+            ):
 
                 otp_record.attempts += 1
 
@@ -230,13 +256,15 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
 
             else:
 
-                # Generate a random, secure password-reset token.
+                # Generate a secure random reset token.
                 reset_token = secrets.token_urlsafe(32)
 
                 # Store only the hashed reset token.
-                otp_record.reset_token_hash = make_password(reset_token)
+                otp_record.reset_token_hash = make_password(
+                    reset_token
+                )
 
-                # Reset token expires after 10 minutes.
+                # Set reset-token expiry to 10 minutes.
                 otp_record.reset_token_expires_at = (
                     timezone.now() + timedelta(minutes=10)
                 )
@@ -252,43 +280,51 @@ class AdminVerifyPasswordResetOTPSerializer(serializers.Serializer):
                     ]
                 )
 
-        # Raise the OTP error after leaving the transaction.
+                # Capture the expiry timestamp for the frontend.
+                reset_token_expires_at = (
+                    otp_record.reset_token_expires_at
+                )
+
+        # Raise OTP errors after leaving the transaction.
         if otp_error:
             raise serializers.ValidationError({
-                "otp": otp_error
+                "otp": otp_error,
             })
 
         return {
             "message": "Admin OTP verified successfully.",
+            "email": email,
             "reset_token": reset_token,
+            "reset_token_expires_at": (
+                reset_token_expires_at.isoformat()
+            ),
         }
 
 
+# --------------------------------------------------
+# ADMIN RESET PASSWORD
+# --------------------------------------------------
+
 class AdminResetPasswordSerializer(serializers.Serializer):
 
-    # Admin email address.
     email = serializers.EmailField()
 
-    # Token received after successful OTP verification.
     reset_token = serializers.CharField(
         write_only=True,
         trim_whitespace=False,
     )
 
-    # New password.
     new_password = serializers.CharField(
         write_only=True,
         min_length=8,
         trim_whitespace=False,
     )
 
-    # Confirm the new password.
     confirm_password = serializers.CharField(
         write_only=True,
         trim_whitespace=False,
     )
 
-    # Validate password strength and confirmation.
     def validate(self, data):
 
         password = data["new_password"]
@@ -296,32 +332,42 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 
         if len(password) < 8:
             raise serializers.ValidationError({
-                "new_password": "Password must contain at least 8 characters."
+                "new_password": (
+                    "Password must contain at least 8 characters."
+                ),
             })
 
         if not re.search(r"[A-Z]", password):
             raise serializers.ValidationError({
-                "new_password": "Include at least one uppercase letter."
+                "new_password": (
+                    "Include at least one uppercase letter."
+                ),
             })
 
         if not re.search(r"[a-z]", password):
             raise serializers.ValidationError({
-                "new_password": "Include at least one lowercase letter."
+                "new_password": (
+                    "Include at least one lowercase letter."
+                ),
             })
 
         if not re.search(r"[0-9]", password):
             raise serializers.ValidationError({
-                "new_password": "Include at least one number."
+                "new_password": (
+                    "Include at least one number."
+                ),
             })
 
         if not re.search(r"[^A-Za-z0-9]", password):
             raise serializers.ValidationError({
-                "new_password": "Include at least one special character."
+                "new_password": (
+                    "Include at least one special character."
+                ),
             })
 
         if password != confirm_password:
             raise serializers.ValidationError({
-                "confirm_password": "Passwords do not match."
+                "confirm_password": "Passwords do not match.",
             })
 
         return data
@@ -344,7 +390,7 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 
             if user is None:
                 raise serializers.ValidationError({
-                    "email": "Invalid admin account."
+                    "email": "Invalid admin account.",
                 })
 
             # Find the latest verified admin password-reset request.
@@ -363,16 +409,20 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 
             if otp_record is None:
                 raise serializers.ValidationError({
-                    "reset_token": "Invalid or expired reset token."
+                    "reset_token": (
+                        "Invalid or expired reset token."
+                    ),
                 })
 
-            # Verify the reset token.
-            if not check_password(
+            # Verify the submitted reset token.
+            if not otp_record.reset_token_hash or not check_password(
                 reset_token,
                 otp_record.reset_token_hash,
             ):
                 raise serializers.ValidationError({
-                    "reset_token": "Invalid or expired reset token."
+                    "reset_token": (
+                        "Invalid or expired reset token."
+                    ),
                 })
 
             # Apply Django's configured password validators.
@@ -381,20 +431,22 @@ class AdminResetPasswordSerializer(serializers.Serializer):
 
             except DjangoValidationError as error:
                 raise serializers.ValidationError({
-                    "new_password": error.messages
+                    "new_password": error.messages,
                 })
 
             # Prevent reuse of the current password.
             if user.check_password(new_password):
                 raise serializers.ValidationError({
-                    "new_password": "You cannot reuse your current password."
+                    "new_password": (
+                        "You cannot reuse your current password."
+                    ),
                 })
 
             # Update the admin password.
             user.set_password(new_password)
             user.save(update_fields=["password"])
 
-            # Consume admin reset OTP records only.
+            # Consume all outstanding admin password-reset OTPs.
             EmailOTP.objects.filter(
                 user=user,
                 purpose="admin_password_reset",
@@ -406,5 +458,5 @@ class AdminResetPasswordSerializer(serializers.Serializer):
             )
 
         return {
-            "message": "Admin password reset successfully."
+            "message": "Admin password reset successfully.",
         }

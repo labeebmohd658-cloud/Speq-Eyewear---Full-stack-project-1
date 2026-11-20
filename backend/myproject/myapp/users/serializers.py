@@ -11,12 +11,20 @@ from django.contrib.auth import password_validation
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
 from django.conf import settings
-from django.db import transaction
+from django.db import transaction,IntegrityError
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.contrib.auth.hashers import check_password,make_password
+from django.contrib.auth import get_user_model
 import re
 import secrets
 from datetime import timedelta 
+from .signup_otp import (
+    generate_signup_otp,
+    get_signup_cache_key,
+    save_pending_signup,
+    resend_signup_otp,
+)
+from django.core.cache import cache
 
 
 
@@ -24,12 +32,16 @@ from datetime import timedelta
 User = get_user_model()
 
 
+class SignupSerializer(serializers.Serializer):
 
-import re
+    full_name = serializers.CharField()
 
-from rest_framework import serializers
+    email = serializers.EmailField()
 
-class SignupSerializer(serializers.ModelSerializer):
+    phone = serializers.CharField(
+        required=False,
+        allow_blank=True
+    )
 
     password = serializers.CharField(
         write_only=True,
@@ -40,23 +52,9 @@ class SignupSerializer(serializers.ModelSerializer):
         write_only=True
     )
 
-    phone = serializers.CharField(
-        required=False,
-        allow_blank=True
-    )
-
-    class Meta:
-        model = User
-        fields = [
-            "full_name",
-            "email",
-            "phone",
-            "password",
-            "confirm_password",
-        ]
-
-    # Full name validation
+    # Validate full name
     def validate_full_name(self, value):
+
         value = value.strip()
 
         if len(value) < 3:
@@ -71,8 +69,9 @@ class SignupSerializer(serializers.ModelSerializer):
 
         return value
 
-    # Email validation
+    # Validate email
     def validate_email(self, value):
+
         value = value.strip().lower()
 
         if User.objects.filter(email__iexact=value).exists():
@@ -82,8 +81,9 @@ class SignupSerializer(serializers.ModelSerializer):
 
         return value
 
-    # Phone validation
+    # Validate phone
     def validate_phone(self, value):
+
         value = value.strip()
 
         if value and not re.fullmatch(r"\d{10}", value):
@@ -93,8 +93,9 @@ class SignupSerializer(serializers.ModelSerializer):
 
         return value
 
-    # Password validation
+    # Validate password strength
     def validate_password(self, value):
+
         errors = []
 
         if not re.search(r"[A-Z]", value):
@@ -122,8 +123,9 @@ class SignupSerializer(serializers.ModelSerializer):
 
         return value
 
-    # Confirm password validation
+    # Validate password confirmation
     def validate(self, data):
+
         if data["password"] != data["confirm_password"]:
             raise serializers.ValidationError({
                 "confirm_password": "Passwords do not match."
@@ -131,183 +133,181 @@ class SignupSerializer(serializers.ModelSerializer):
 
         return data
 
-    # Create user
+    # Store pending signup and send OTP
     def create(self, validated_data):
+
         validated_data.pop("confirm_password")
+
         password = validated_data.pop("password")
 
-        user = User(**validated_data)
+        email = validated_data["email"]
 
-        # AbstractUser requires a username unless your model
-        # has been configured to remove that requirement.
-        user.username = user.email
+        # Hash password before temporary storage.
+        validated_data["password_hash"] = make_password(password)
 
-        user.set_password(password)
+        # Generate OTP and store pending signup in cache.
+        self.expires_at = generate_signup_otp(
+            email=email,
+            user_data=validated_data
+        )
 
-        user.is_active = False
-        user.is_email_verified = False
+        # Return email instead of a User instance.
+        return {
+            "email": email
+        }
 
-        user.save()
 
-        generate_and_send_otp(user)
-
-        return user
+# ==========================================
+# CUSTOMER VERIFY OTP SERIALIZER
+# ==========================================
 
 class VerifyOTPSerializer(serializers.Serializer):
 
-    # Accept the user's email and six-digit OTP.
     email = serializers.EmailField()
-    otp = serializers.RegexField(
-    regex=r"^\d{6}$",
-    error_messages={
-        "invalid": "OTP must contain exactly 6 digits."
-    },
-)
 
-    def validate(self, data):
-        return data
+    otp = serializers.RegexField(
+        regex=r"^\d{6}$",
+        error_messages={
+            "invalid": "OTP must contain exactly 6 digits."
+        }
+    )
 
     def create(self, validated_data):
 
-        email = validated_data["email"]
+        email = validated_data["email"].strip().lower()
+
         otp = validated_data["otp"]
 
-        otp_error = None
-        verified_user = None
+        # Retrieve pending signup from cache.
+        cache_key = get_signup_cache_key(email)
 
-        # Process verification inside a database transaction.
-        with transaction.atomic():
+        pending_data = cache.get(cache_key)
 
-            # Find and lock the user record.
-            try:
-                user = User.objects.select_for_update().get(
-                    email__iexact=email
-                )
-            except User.DoesNotExist:
-                raise serializers.ValidationError({
-                    "email": "No account found with this email."
-                })
+        if not pending_data:
+            raise serializers.ValidationError({
+                "email": "No pending signup found. Please sign up again."
+            })
 
-            if user.is_email_verified:
-                raise serializers.ValidationError({
-                    "email": "This email is already verified."
-                })
+        # Check OTP expiry.
+        if timezone.now().timestamp() > pending_data["otp_expires_at"]:
+            raise serializers.ValidationError({
+                "otp": "OTP has expired. Please request a new OTP."
+            })
 
-            # Find and lock the latest valid OTP.
-            otp_record = (
-                EmailOTP.objects.select_for_update()
-                .filter(
-                    user=user,
-                    purpose="email_verification",
-                    is_used=False,
-                    expires_at__gt=timezone.now(),
-                )
-                .order_by("-created_at", "-pk")
-                .first()
-            )
+        # Check whether an OTP is available.
+        if not pending_data.get("otp_hash"):
+            raise serializers.ValidationError({
+                "otp": "Please request a new OTP."
+            })
 
-            if otp_record is None:
-                raise serializers.ValidationError({
-                    "otp": "Invalid or expired OTP."
-                })
+        # Check maximum attempts.
+        if pending_data["attempts"] >= 5:
+            raise serializers.ValidationError({
+                "otp": "Maximum attempts reached. Request a new OTP."
+            })
 
-            # Check the maximum attempt limit.
-            if otp_record.attempts >= 5:
+        # Verify submitted OTP.
+        if not check_password(
+            otp,
+            pending_data["otp_hash"]
+        ):
 
-                otp_record.is_used = True
-                otp_record.save(update_fields=["is_used"])
+            pending_data["attempts"] += 1
 
-                otp_error = (
+            if pending_data["attempts"] >= 5:
+
+                pending_data["otp_hash"] = None
+
+                error_message = (
                     "Maximum attempts reached. Request a new OTP."
-                )
-
-            # Verify the submitted OTP against its stored hash.
-            elif not check_password(otp, otp_record.otp_hash):
-
-                otp_record.attempts += 1
-
-                if otp_record.attempts >= 5:
-                    otp_record.is_used = True
-                    otp_error = (
-                        "Maximum attempts reached. Request a new OTP."
-                    )
-                else:
-                    otp_error = (
-                        f"Incorrect OTP. "
-                        f"{5 - otp_record.attempts} attempts remaining."
-                    )
-
-                otp_record.save(
-                    update_fields=["attempts", "is_used"]
                 )
 
             else:
 
-                # Mark the OTP as used after successful verification.
-                otp_record.is_used = True
-                otp_record.save(update_fields=["is_used"])
-
-                # Verify and activate the user account.
-                user.is_email_verified = True
-                user.is_active = True
-
-                user.save(
-                    update_fields=["is_email_verified", "is_active"]
+                error_message = (
+                    f"Incorrect OTP. "
+                    f"{5 - pending_data['attempts']} attempts remaining."
                 )
 
-                verified_user = user
+            save_pending_signup(email, pending_data)
 
-        # Raise OTP errors after the transaction commits.
-        if otp_error:
             raise serializers.ValidationError({
-                "otp": otp_error
+                "otp": error_message
             })
 
-        return verified_user
+        # Create User only after successful OTP verification.
+        try:
+
+            with transaction.atomic():
+
+                # Check email uniqueness again.
+                if User.objects.filter(
+                    email__iexact=email
+                ).exists():
+
+                    raise serializers.ValidationError({
+                        "email": "An account with this email already exists."
+                    })
+
+                user = User(
+                    full_name=pending_data["full_name"],
+                    email=email,
+                    phone=pending_data.get("phone", ""),
+                    username=email,
+                    is_active=True,
+                    is_email_verified=True,
+                )
+
+                # Password is already hashed.
+                user.password = pending_data["password_hash"]
+
+                user.save()
+
+        except IntegrityError:
+
+            raise serializers.ValidationError({
+                "email": "An account with this email already exists."
+            })
+
+        # Remove pending signup after successful account creation.
+        cache.delete(cache_key)
+
+        return user
 
 
-
-
+# ==========================================
+# CUSTOMER RESEND OTP SERIALIZER
+# ==========================================
 
 class ResendOTPSerializer(serializers.Serializer):
-    # Accepts the user's email address.
+
     email = serializers.EmailField()
 
-    # Checks whether the email belongs to an existing user.
+    # Validate pending signup email.
     def validate_email(self, value):
-        try:
-            # Finds the user by email, ignoring uppercase/lowercase differences.
-            user = User.objects.get(email__iexact=value)
 
-        except User.DoesNotExist:
-            # Returns an error if no account exists.
+        email = value.strip().lower()
+
+        # Check whether an account already exists.
+        if User.objects.filter(email__iexact=email).exists():
             raise serializers.ValidationError(
-                "No account found with this email."
+                "An account with this email already exists."
             )
 
-        # Prevents verified users from requesting another OTP.
-        if user.is_email_verified:
+        # Check whether pending signup exists.
+        if not cache.get(get_signup_cache_key(email)):
             raise serializers.ValidationError(
-                "This email is already verified."
+                "No pending signup found. Please sign up again."
             )
 
-        # Stores the user instance for use in the create method.
-        self.user = user
+        return email
 
-        # Returns the validated email address.
-        return value
-
-    # Generates and sends a new OTP after validation succeeds.
+    # Generate and send a new OTP.
     def create(self, validated_data):
-        user = self.user
 
-        # Invalidates previous unused OTPs and sends a new OTP.
-        generate_and_send_otp(user)
+        email = validated_data["email"]
 
-        # Returns a success message.
-        return {
-            "message": "A new OTP has been sent to your email."
-        }
+        return resend_signup_otp(email)
 
 
 
@@ -352,16 +352,18 @@ class ForgotPasswordSerializer(serializers.Serializer):
     # Generate and send the password-reset OTP.
     def create(self, validated_data):
 
-        # DRF ValidationError will automatically be handled by DRF.
-        generate_and_send_otp(
-            user=self.user,
+        # Generate a new OTP and get its expiry timestamp.
+        expires_at = generate_and_send_otp(
+            self.user,
             purpose="password_reset"
         )
 
         return {
-            "message": "Password reset OTP sent successfully."
+            "message": "A new password reset OTP has been sent to your email.",
+            "email": self.user.email,
+            "expires_at": expires_at,
         }
-
+    
 class ResendPasswordResetOTPSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -387,13 +389,17 @@ class ResendPasswordResetOTPSerializer(serializers.Serializer):
         return value
 
     def create(self, validated_data):
-        generate_and_send_otp(
+
+        # Generate a new OTP and get its expiry timestamp.
+        expires_at = generate_and_send_otp(
             self.user,
             purpose="password_reset"
         )
 
         return {
-            "message": "A new password reset OTP has been sent to your email."
+            "message": "A new password reset OTP has been sent to your email.",
+            "email": self.user.email,
+            "expires_at": expires_at,
         }
 
 
@@ -476,14 +482,17 @@ class VerifyPasswordResetOTPSerializer(serializers.Serializer):
             else:
 
                 reset_token = secrets.token_urlsafe(32)
+                reset_token_expires_at = None
 
                 otp_record.reset_token_hash = make_password(
                     reset_token
                 )
 
-                otp_record.reset_token_expires_at = (
+                reset_token_expires_at = (
                     timezone.now() + timedelta(minutes=10)
                 )
+
+                otp_record.reset_token_expires_at = reset_token_expires_at
 
                 otp_record.verified_at = timezone.now()
 
@@ -501,8 +510,10 @@ class VerifyPasswordResetOTPSerializer(serializers.Serializer):
             })
 
         return {
-            "message": "OTP verified successfully.",
-            "reset_token": reset_token,
+         "message": "OTP verified successfully.",
+        "email": user.email,
+        "reset_token": reset_token,
+        "reset_token_expires_at": reset_token_expires_at,
         }
 
 
@@ -1442,7 +1453,7 @@ class ConfirmEmailChangeSerializer(serializers.Serializer):
                 raise serializers.ValidationError({
                     "reset_token": "This account cannot change its email."
                 })
-
+            # to check the mail
             if User.objects.filter(
                 email__iexact=self.validated_data["new_email"]
             ).exclude(pk=user.pk).exists():
@@ -1470,4 +1481,6 @@ class ConfirmEmailChangeSerializer(serializers.Serializer):
 
 
         return user
+
+
 

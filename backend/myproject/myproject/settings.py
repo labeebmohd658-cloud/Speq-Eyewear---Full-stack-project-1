@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'myapp',
     'rest_framework_simplejwt.token_blacklist',
+    'products',
 ]
 
 MIDDLEWARE = [
@@ -220,3 +221,19 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "ROTATE_REFRESH_TOKENS": False,
 }
+
+CACHES = {
+    "default": {
+        # Store temporary data in Django application memory.
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+
+        # Unique name for this application's cache.
+        "LOCATION": "speq-signup-cache",
+
+        # Default cache timeout: 15 minutes.
+        "TIMEOUT": 900,
+    }
+}
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"

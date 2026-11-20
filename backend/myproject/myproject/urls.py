@@ -16,9 +16,21 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path,include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("api/auth/",include("myapp.urls")),
-    path("api/auth/admin/",include("myapp.admin_panel.urls"))
+    path("api/auth/admin/",include("myapp.admin_panel.urls")),
+    path("api/products/", include("products.urls")),
+    path("api/admin/",include("products.Admin_panel.urls"))
 ]
+
+#This serves uploaded images duting the local development.production needs proper media hosting
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT
+    )
+

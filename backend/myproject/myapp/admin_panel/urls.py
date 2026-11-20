@@ -7,13 +7,16 @@ from .views import (
     AdminForgotPasswordView,
     AdminVerifyPasswordResetOTPView,
     AdminResetPasswordView,
+    AdminProfileView,
+    AdminTokenRefreshView,
+    AdminLogoutView,
 )
 
 urlpatterns = [
-
     # Admin authentication
     path("login/", AdminLoginView.as_view(), name="admin-login"),
-
+    path("profile/", AdminProfileView.as_view(), name="admin-profile"),
+    path("token/refresh/",AdminTokenRefreshView.as_view(),name="admin-token-refresh",),
     # Admin password recovery
     path(
         "forgot-password/",
@@ -30,12 +33,16 @@ urlpatterns = [
         AdminResetPasswordView.as_view(),
         name="admin-reset-password",
     ),
-
     # Admin user management
     path("users/", AdminUserListView.as_view(), name="admin-user-list"),
     path(
         "users/<int:user_id>/status/",
         AdminUserStatusView.as_view(),
         name="admin-user-status",
+    ),
+    path(
+        "logout/",
+        AdminLogoutView.as_view(),
+        name="admin-logout",
     ),
 ]
