@@ -1,5 +1,8 @@
 
-/* RECOVERY MODAL OVERLAY */
+/* =========================================
+   SPEQ - ARCTIC PREMIUM RECOVERY MODAL
+========================================= */
+
 .recovery-overlay {
   position: fixed;
   inset: 0;
@@ -8,8 +11,9 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(35, 31, 26, 0.48);
-  backdrop-filter: blur(7px);
+  background: rgba(23, 43, 58, 0.58);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
 }
 
 /* MODAL CARD */
@@ -20,10 +24,11 @@
   max-height: 90vh;
   overflow-y: auto;
   padding: 42px 46px 30px;
-  background: #FFFEFA;
-  border-radius: 5px;
-  box-shadow: 0 20px 65px rgba(35, 31, 26, 0.18);
-  color: #3B342B;
+  background: #EAF2F8;
+  border: 1px solid rgba(66, 103, 130, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 24px 75px rgba(23, 43, 58, 0.22);
+  color: #172B3A;
 }
 
 /* TOP BADGE */
@@ -36,10 +41,10 @@
 .recovery-badge span {
   padding: 8px 14px;
   border-radius: 30px;
-  background: #F3EDE2;
-  color: #81776B;
+  background: rgba(197, 174, 135, 0.2);
+  color: #426782;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 1.5px;
 }
 
@@ -48,7 +53,7 @@
   position: absolute;
   top: 27px;
   right: 28px;
-  color: #EAE3D8;
+  color: rgba(66, 103, 130, 0.18);
   font-family: Georgia, serif;
   font-size: 17px;
   letter-spacing: 3px;
@@ -62,11 +67,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 5px;
+  padding: 6px;
   border: none;
+  border-radius: 50%;
   background: transparent;
-  color: #81776B;
+  color: #8295A5;
   cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.recovery-close:hover {
+  color: #172B3A;
+  background: rgba(66, 103, 130, 0.1);
 }
 
 /* CENTER ICON */
@@ -78,8 +90,8 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #F3EDE2;
-  color: #8D704D;
+  background: rgba(197, 174, 135, 0.22);
+  color: #426782;
 }
 
 /* HEADING */
@@ -90,6 +102,7 @@
 
 .recovery-heading h2 {
   margin: 0 0 12px;
+  color: #172B3A;
   font-family: Georgia, serif;
   font-size: 29px;
   font-weight: 400;
@@ -99,7 +112,7 @@
 .recovery-heading p {
   max-width: 350px;
   margin: 0 auto;
-  color: #81776B;
+  color: #8295A5;
   font-size: 12px;
   line-height: 1.8;
 }
@@ -114,9 +127,9 @@
 
 .recovery-label label,
 .recovery-label span {
-  color: #81776B;
+  color: #426782;
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 1px;
 }
 
@@ -132,9 +145,16 @@
   align-items: center;
   gap: 12px;
   padding: 0 15px;
-  background: #F3EDE2;
-  color: #8D704D;
-  border-radius: 3px;
+  background: #FFFFFF;
+  color: #426782;
+  border: 1px solid rgba(66, 103, 130, 0.2);
+  border-radius: 5px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.recovery-input:focus-within {
+  border-color: #426782;
+  box-shadow: 0 0 0 3px rgba(66, 103, 130, 0.1);
 }
 
 .recovery-input input {
@@ -142,16 +162,16 @@
   border: none;
   outline: none;
   background: transparent;
-  color: #3B342B;
+  color: #172B3A;
   font-family: inherit;
   font-size: 13px;
 }
 
 .recovery-input input::placeholder {
-  color: #A99F92;
+  color: #A2B0BC;
 }
 
-/* BUTTONS */
+/* PRIMARY BUTTON */
 .recovery-submit {
   width: 100%;
   min-height: 50px;
@@ -160,19 +180,29 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  border: none;
-  border-radius: 3px;
-  background: #3B342B;
-  color: #FFFEFA;
+  border: 1px solid #172B3A;
+  border-radius: 5px;
+  background: #172B3A;
+  color: #FFFFFF;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 1.3px;
   cursor: pointer;
-  transition: background 0.25s ease;
+  transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
 }
 
-.recovery-submit:hover {
-  background: #8D704D;
+.recovery-submit:hover:not(:disabled) {
+  background: #426782;
+  border-color: #426782;
+}
+
+.recovery-submit:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.recovery-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* OTP SECTION */
@@ -183,42 +213,53 @@
 .recovery-divider {
   height: 1px;
   margin-bottom: 25px;
-  background: #EAE3D8;
+  background: rgba(66, 103, 130, 0.2);
 }
 
 .recovery-otp-section h3 {
-  margin: 0 0 20px;
+  margin: 0 0 12px;
   text-align: center;
+  color: #172B3A;
   font-family: Georgia, serif;
   font-size: 20px;
   font-weight: 400;
+}
+
+.recovery-otp-description {
+  margin: 8px 0 18px;
+  color: #8295A5;
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 /* OTP INPUTS */
 .recovery-otp-inputs {
   display: flex;
   justify-content: center;
-  gap: 9px;
+  gap: 10px;
+  margin-bottom: 22px;
 }
 
 .recovery-otp-inputs input {
-  width: 43px;
-  height: 48px;
+  width: 48px;
+  height: 52px;
+  box-sizing: border-box;
   padding: 0;
-  border: 1px solid #EAE3D8;
-  border-radius: 3px;
-  outline: none;
-  background: #F3EDE2;
-  color: #3B342B;
+  border: 1px solid rgba(66, 103, 130, 0.22);
+  border-radius: 5px;
+  background: #FFFFFF;
+  color: #172B3A;
+  font-size: 20px;
+  font-weight: 600;
   text-align: center;
-  font-size: 18px;
-  transition: all 0.2s ease;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .recovery-otp-inputs input:focus {
-  background: #FFFEFA;
-  border-color: #A88962;
-  box-shadow: 0 3px 12px rgba(168, 137, 98, 0.15);
+  border-color: #426782;
+  box-shadow: 0 0 0 3px rgba(66, 103, 130, 0.12);
 }
 
 /* TIMER AND RESEND */
@@ -228,7 +269,7 @@
   align-items: center;
   gap: 10px;
   margin-top: 17px;
-  color: #81776B;
+  color: #8295A5;
   font-size: 10px;
 }
 
@@ -243,13 +284,18 @@
   padding: 0;
   border: none;
   background: transparent;
-  color: #8D704D;
+  color: #426782;
   font-size: 10px;
+  font-weight: 600;
   cursor: pointer;
 }
 
+.recovery-timer button:hover:not(:disabled) {
+  color: #172B3A;
+}
+
 .recovery-timer button:disabled {
-  color: #B8AEA1;
+  color: #A2B0BC;
   cursor: not-allowed;
 }
 
@@ -262,17 +308,26 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: none;
-  border-radius: 3px;
-  background: #F3EDE2;
-  color: #81776B;
+  border: 1px solid rgba(66, 103, 130, 0.15);
+  border-radius: 5px;
+  background: rgba(66, 103, 130, 0.08);
+  color: #426782;
   font-size: 10px;
+  font-weight: 600;
   letter-spacing: 0.5px;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .recovery-back:hover {
-  background: #EAE3D8;
+  background: rgba(66, 103, 130, 0.15);
+}
+
+/* ERROR */
+.recovery-error {
+  color: #B42318;
+  font-size: 13px;
+  margin: 8px 0 0;
 }
 
 /* RESPONSIVE */
@@ -294,61 +349,26 @@
   }
 
   .recovery-otp-inputs input {
-    width: 39px;
-    height: 44px;
+    width: 40px;
+    height: 46px;
   }
 }
-.recovery-error {
-  color: #b42318;
-  font-size: 13px;
-  margin: 8px 0 0;
-}
 
-.recovery-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.recovery-otp-description {
-  margin: 8px 0 18px;
-  color: #81776B;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.recovery-otp-inputs {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-bottom: 22px;
-}
-
-.recovery-otp-inputs input {
-  width: 48px;
-  height: 52px;
-  box-sizing: border-box;
-  border: 1px solid #EAE3D8;
-  border-radius: 4px;
-  background: #F3EDE2;
-  color: #3B342B;
-  font-size: 20px;
-  font-weight: 600;
-  text-align: center;
-  outline: none;
-}
-
-.recovery-otp-inputs input:focus {
-  border-color: #A88962;
-  background: #FFFEFA;
-  box-shadow: 0 3px 12px rgba(168, 137, 98, 0.15);
-}
-
-@media (max-width: 400px) {
+@media (max-width: 360px) {
   .recovery-otp-inputs {
-    gap: 6px;
+    gap: 5px;
   }
 
   .recovery-otp-inputs input {
-    width: 40px;
-    height: 46px;
+    width: 36px;
+    height: 43px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recovery-modal *,
+  .recovery-modal *::before,
+  .recovery-modal *::after {
+    transition-duration: 0.01ms !important;
   }
 }

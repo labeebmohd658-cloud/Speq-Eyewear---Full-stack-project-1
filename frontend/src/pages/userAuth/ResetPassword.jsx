@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { LockKeyhole, Eye, EyeOff, ArrowRight } from "lucide-react";
 
@@ -8,13 +8,59 @@ import "./ResetPassword.css";
 
 import { API_BASE } from "../../utils/api";
 
+const RESET_SESSION_STORAGE_KEY = "customerPasswordResetSession";
+const FORGOT_OTP_STORAGE_KEY = "customerForgotPasswordOTP";
+
 const ResetPassword = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Receive email and reset token from OTP verification.
-  const email = location.state?.email || "";
-  const resetToken = location.state?.resetToken || "";
+  // Restore reset session from navigation state or sessionStorage.
+  const [resetSession, setResetSession] = useState(() => {
+    const navigationSession = location.state;
+
+    if (
+      navigationSession?.email &&
+      navigationSession?.resetToken
+    ) {
+      return {
+        email: navigationSession.email,
+        reset_token: navigationSession.resetToken,
+        expires_at: navigationSession.resetTokenExpiresAt || null,
+      };
+    }
+
+    try {
+      const savedSession = sessionStorage.getItem(
+        RESET_SESSION_STORAGE_KEY
+      );
+
+      if (!savedSession) {
+        return null;
+      }
+
+      const parsedSession = JSON.parse(savedSession);
+
+      if (
+        parsedSession.purpose !== "password_reset" ||
+        !parsedSession.email ||
+        !parsedSession.reset_token
+      ) {
+        sessionStorage.removeItem(RESET_SESSION_STORAGE_KEY);
+        return null;
+      }
+
+      return parsedSession;
+    } catch (error) {
+      console.error("Unable to restore reset session:", error);
+      sessionStorage.removeItem(RESET_SESSION_STORAGE_KEY);
+      return null;
+    }
+  });
+
+  const email = resetSession?.email || "";
+  const resetToken = resetSession?.reset_token || "";
+  const resetTokenExpiresAt = resetSession?.expires_at || null;
 
   // Store password form values.
   const [newPassword, setNewPassword] = useState("");
@@ -28,6 +74,33 @@ const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Persist navigation-based reset sessions too.
+  useEffect(() => {
+    if (!resetSession) {
+      return;
+    }
+
+    try {
+      sessionStorage.setItem(
+        RESET_SESSION_STORAGE_KEY,
+        JSON.stringify({
+          purpose: "password_reset",
+          email: resetSession.email,
+          reset_token: resetSession.reset_token,
+          expires_at: resetSession.expires_at || null,
+        })
+      );
+    } catch (error) {
+      console.error("Unable to save reset session:", error);
+    }
+  }, [resetSession]);
+
+  // Check whether the backend reset token has expired.
+  const resetSessionExpired =
+    resetTokenExpiresAt &&
+    Number.isFinite(new Date(resetTokenExpiresAt).getTime()) &&
+    new Date(resetTokenExpiresAt).getTime() <= Date.now();
 
   // Check password requirements while typing.
   const passwordChecks = {
@@ -70,6 +143,13 @@ const ResetPassword = () => {
     if (!resetToken || !email) {
       setErrorMessage(
         "Your password reset session has expired. Please request a new OTP."
+      );
+      return;
+    }
+
+    if (resetSessionExpired) {
+      setErrorMessage(
+        "Your password reset authorization has expired. Please request a new OTP."
       );
       return;
     }
@@ -129,7 +209,7 @@ const ResetPassword = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: email,
+            email,
             reset_token: resetToken,
             new_password: newPassword,
             confirm_password: confirmPassword,
@@ -156,7 +236,13 @@ const ResetPassword = () => {
       setNewPassword("");
       setConfirmPassword("");
 
-      // Navigate to login and remove the reset token from navigation state.
+      // Clear both pending OTP and reset-session data.
+      sessionStorage.removeItem(FORGOT_OTP_STORAGE_KEY);
+      sessionStorage.removeItem(RESET_SESSION_STORAGE_KEY);
+
+      setResetSession(null);
+
+      // Navigate to login.
       navigate("/login", {
         replace: true,
         state: {
@@ -164,7 +250,6 @@ const ResetPassword = () => {
           email,
         },
       });
-
     } catch (error) {
       setErrorMessage(
         error.message || "Something went wrong. Please try again."
@@ -174,8 +259,8 @@ const ResetPassword = () => {
     }
   };
 
-  // Do not display the reset form without a reset session.
-  if (!email || !resetToken) {
+  // Do not display the reset form without a valid reset session.
+  if (!email || !resetToken || resetSessionExpired) {
     return (
       <main className="reset-password-page">
         <section className="reset-password-card">

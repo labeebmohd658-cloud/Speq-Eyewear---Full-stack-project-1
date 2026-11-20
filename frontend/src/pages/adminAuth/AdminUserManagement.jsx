@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Search,
@@ -13,6 +14,7 @@ import {
   ShieldAlert,
   LoaderCircle,
   X,
+  CheckCircle,
 } from "lucide-react";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api/auth/admin/users/";
@@ -38,7 +40,9 @@ const StatCard = ({ title, value, description, icon: Icon }) => {
         </div>
       </div>
 
-      <h2 className="mt-4 text-3xl font-semibold text-[#252720]">{value}</h2>
+      <h2 className="mt-4 text-3xl font-semibold text-[#252720]">
+        {value}
+      </h2>
 
       <p className="mt-2 text-xs text-gray-400">{description}</p>
     </div>
@@ -73,11 +77,17 @@ const AdminUserManagement = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
   const [actionLoading, setActionLoading] = useState(null);
+  const [actionError, setActionError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [ordering, setOrdering] = useState("-date_joined");
 
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+
+  // Customer waiting for block/unblock confirmation.
+  const [confirmCustomer, setConfirmCustomer] = useState(null);
 
   // Fetch customers from the Django REST Framework API.
   const fetchCustomers = useCallback(async () => {
@@ -88,7 +98,9 @@ const AdminUserManagement = () => {
       const token = getAdminToken();
 
       if (!token) {
-        throw new Error("Admin access token not found. Please log in again.");
+        throw new Error(
+          "Admin access token not found. Please log in again."
+        );
       }
 
       const params = new URLSearchParams({
@@ -97,33 +109,41 @@ const AdminUserManagement = () => {
         ordering: ordering,
       });
 
-      // Backend currently uses the search parameter "Search".
+      // Backend currently uses the search parameter "search".
       if (search.trim()) {
         params.append("search", search.trim());
       }
 
-      const response = await fetch(`${API_BASE_URL}?${params.toString()}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await fetch(
+        `${API_BASE_URL}?${params.toString()}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.detail || data.message || "Unable to load customers.",
+          data.detail || data.message || "Unable to load customers."
         );
       }
 
       // Supports standard DRF pagination and a plain array response.
-      const customerList = Array.isArray(data) ? data : data.results || [];
+      const customerList = Array.isArray(data)
+        ? data
+        : data.results || [];
 
       setCustomers(customerList);
+
       setTotalCustomers(
-        Array.isArray(data) ? data.length : (data.count ?? customerList.length),
+        Array.isArray(data)
+          ? data.length
+          : (data.count ?? customerList.length)
       );
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -134,7 +154,7 @@ const AdminUserManagement = () => {
     }
   }, [page, search, ordering]);
 
-  // Fetch again whenever the page or search changes.
+  // Fetch again whenever page, search or ordering changes.
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
@@ -144,7 +164,7 @@ const AdminUserManagement = () => {
     if (activeFilter === "All") return customers;
 
     return customers.filter(
-      (customer) => getCustomerStatus(customer) === activeFilter,
+      (customer) => getCustomerStatus(customer) === activeFilter
     );
   }, [customers, activeFilter]);
 
@@ -152,62 +172,90 @@ const AdminUserManagement = () => {
   const pageStats = useMemo(() => {
     return {
       active: customers.filter(
-        (customer) => getCustomerStatus(customer) === "Active",
+        (customer) => getCustomerStatus(customer) === "Active"
       ).length,
 
       blocked: customers.filter(
-        (customer) => getCustomerStatus(customer) === "Blocked",
+        (customer) => getCustomerStatus(customer) === "Blocked"
       ).length,
 
-      verified: customers.filter((customer) => customer.is_email_verified)
-        .length,
+      verified: customers.filter(
+        (customer) => customer.is_email_verified
+      ).length,
     };
   }, [customers]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCustomers / PAGE_SIZE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(totalCustomers / PAGE_SIZE)
+  );
 
-  // Block or unblock a customer.
-  const handleStatusChange = async (customer) => {
-    const currentlyBlocked = Boolean(customer.is_blocked);
-    const nextBlockedStatus = !currentlyBlocked;
+  // Open the custom confirmation modal.
+  const handleStatusChange = (customer) => {
+    setActionError("");
+    setSuccessMessage("");
+    setConfirmCustomer(customer);
+  };
+
+  // Execute block/unblock only after admin confirmation.
+  const confirmStatusChange = async () => {
+    if (!confirmCustomer || actionLoading !== null) return;
+
+    const customer = confirmCustomer;
+    const nextBlockedStatus = !Boolean(customer.is_blocked);
 
     const action = nextBlockedStatus ? "block" : "unblock";
 
-    const confirmed = window.confirm(
-      `Are you sure you want to ${action} ${customer.full_name}?`,
-    );
-
-    if (!confirmed) return;
-
     setActionLoading(customer.id);
+    setActionError("");
 
     try {
       const token = getAdminToken();
 
-      const response = await fetch(`${API_BASE_URL}${customer.id}/status/`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          is_blocked: nextBlockedStatus,
-        }),
-      });
+      if (!token) {
+        throw new Error(
+          "Admin access token not found. Please log in again."
+        );
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}${customer.id}/status/`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            is_blocked: nextBlockedStatus,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          data.detail || data.message || `Unable to ${action} customer.`,
+          data.detail || data.message || `Unable to ${action} customer.`
         );
       }
 
+      // Close the confirmation modal after a successful API response.
+      setConfirmCustomer(null);
+
+      setSuccessMessage(
+        `${customer.full_name || "Customer"} has been ${
+          nextBlockedStatus ? "blocked" : "unblocked"
+        } successfully.`
+      );
+
       // Reload the latest customer data from the backend.
       await fetchCustomers();
-      setSelectedCustomer(null);
     } catch (err) {
-      window.alert(err.message || "Customer status update failed.");
+      // Keep the modal open and display the backend error inside it.
+      setActionError(
+        err.message || "Customer status update failed."
+      );
     } finally {
       setActionLoading(null);
     }
@@ -219,10 +267,19 @@ const AdminUserManagement = () => {
     setPage(1);
   };
 
+  // Close the confirmation modal.
+  const closeConfirmation = () => {
+    if (actionLoading !== null) return;
+
+    setConfirmCustomer(null);
+    setActionError("");
+  };
+
   const filterOptions = ["All", "Active", "Blocked", "Inactive"];
 
   return (
     <div className="space-y-8">
+
       {/* Page heading */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -230,7 +287,9 @@ const AdminUserManagement = () => {
             Customer Management
           </p>
 
-          <h1 className="font-serif text-3xl text-[#252720]">Customers</h1>
+          <h1 className="font-serif text-3xl text-[#252720]">
+            Customers
+          </h1>
 
           <p className="mt-2 text-sm text-gray-500">
             View and manage your SPEQ Eyewear customers.
@@ -243,10 +302,31 @@ const AdminUserManagement = () => {
           disabled={loading}
           className="flex items-center justify-center gap-2 rounded-lg border border-[#EAE7E0] bg-white px-4 py-3 text-sm font-medium text-[#1B3B2B] transition hover:bg-[#F3F0E8] disabled:opacity-50"
         >
-          <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+          <RefreshCw
+            size={16}
+            className={loading ? "animate-spin" : ""}
+          />
           Refresh
         </button>
       </div>
+
+      {/* Success message */}
+      {successMessage && (
+        <div className="flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <CheckCircle size={18} className="shrink-0" />
+
+          <p className="flex-1">{successMessage}</p>
+
+          <button
+            type="button"
+            onClick={() => setSuccessMessage("")}
+            className="rounded p-1 hover:bg-green-100"
+            aria-label="Dismiss success message"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {/* Statistics */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
@@ -281,8 +361,11 @@ const AdminUserManagement = () => {
 
       {/* Customer table container */}
       <div className="overflow-hidden rounded-xl border border-[#EAE7E0] bg-white">
+
         {/* Search and filters */}
         <div className="flex flex-col gap-5 border-b border-[#EAE7E0] p-5 lg:flex-row lg:items-center lg:justify-between">
+
+          {/* Search */}
           <div className="relative w-full lg:max-w-sm">
             <Search
               size={18}
@@ -298,7 +381,7 @@ const AdminUserManagement = () => {
             />
           </div>
 
-          {/* Sorting dropdown — ADD HERE */}
+          {/* Sorting dropdown */}
           <div className="w-full lg:w-52">
             <select
               value={ordering}
@@ -317,7 +400,7 @@ const AdminUserManagement = () => {
             </select>
           </div>
 
-          {/* Existing status filters — KEEP THIS */}
+          {/* Status filters */}
           <div className="flex flex-wrap gap-2">
             {filterOptions.map((filter) => (
               <button
@@ -336,13 +419,16 @@ const AdminUserManagement = () => {
           </div>
         </div>
 
-        {/* Error message */}
+        {/* Customer list error */}
         {error && (
           <div className="m-5 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <ShieldAlert size={18} className="mt-0.5 shrink-0" />
 
             <div className="flex-1">
-              <p className="font-medium">Unable to load customers</p>
+              <p className="font-medium">
+                Unable to load customers
+              </p>
+
               <p className="mt-1">{error}</p>
             </div>
 
@@ -356,14 +442,19 @@ const AdminUserManagement = () => {
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Loading and empty states */}
         {loading ? (
           <div className="flex min-h-64 flex-col items-center justify-center gap-3">
-            <LoaderCircle size={30} className="animate-spin text-[#1B3B2B]" />
-            <p className="text-sm text-gray-500">Loading customers...</p>
+            <LoaderCircle
+              size={30}
+              className="animate-spin text-[#1B3B2B]"
+            />
+
+            <p className="text-sm text-gray-500">
+              Loading customers...
+            </p>
           </div>
         ) : !error && filteredCustomers.length === 0 ? (
-          /* Empty state */
           <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center">
             <div className="rounded-full bg-[#F3F0E8] p-4 text-[#1B3B2B]">
               <Users size={28} />
@@ -384,12 +475,29 @@ const AdminUserManagement = () => {
               <table className="w-full min-w-[850px] text-left">
                 <thead className="bg-[#FCFBF9]">
                   <tr className="border-b border-[#EAE7E0] text-xs uppercase tracking-wider text-gray-500">
-                    <th className="px-6 py-4 font-medium">Customer</th>
-                    <th className="px-6 py-4 font-medium">Phone</th>
-                    <th className="px-6 py-4 font-medium">Joined Date</th>
-                    <th className="px-6 py-4 font-medium">Verification</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 text-right font-medium">Action</th>
+                    <th className="px-6 py-4 font-medium">
+                      Customer
+                    </th>
+
+                    <th className="px-6 py-4 font-medium">
+                      Phone
+                    </th>
+
+                    <th className="px-6 py-4 font-medium">
+                      Joined Date
+                    </th>
+
+                    <th className="px-6 py-4 font-medium">
+                      Verification
+                    </th>
+
+                    <th className="px-6 py-4 font-medium">
+                      Status
+                    </th>
+
+                    <th className="px-6 py-4 text-right font-medium">
+                      Action
+                    </th>
                   </tr>
                 </thead>
 
@@ -407,8 +515,9 @@ const AdminUserManagement = () => {
                         <td className="px-6 py-5">
                           <div className="flex items-center gap-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E8E1D2] text-sm font-semibold text-[#1B3B2B]">
-                              {customer.full_name?.charAt(0)?.toUpperCase() ||
-                                "C"}
+                              {customer.full_name
+                                ?.charAt(0)
+                                ?.toUpperCase() || "C"}
                             </div>
 
                             <div>
@@ -509,7 +618,10 @@ const AdminUserManagement = () => {
             {/* Pagination */}
             <div className="flex flex-col gap-4 border-t border-[#EAE7E0] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-gray-500">
-                Showing {totalCustomers === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+                Showing{" "}
+                {totalCustomers === 0
+                  ? 0
+                  : (page - 1) * PAGE_SIZE + 1}
                 {" - "}
                 {Math.min(page * PAGE_SIZE, totalCustomers)}
                 {" of "}
@@ -548,6 +660,7 @@ const AdminUserManagement = () => {
       {selectedCustomer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+
             <div className="flex items-center justify-between">
               <h2 className="font-serif text-2xl text-[#252720]">
                 Customer Details
@@ -572,7 +685,9 @@ const AdminUserManagement = () => {
 
               <div>
                 <p className="text-xs text-gray-400">Email</p>
-                <p className="mt-1 text-gray-700">{selectedCustomer.email}</p>
+                <p className="mt-1 text-gray-700">
+                  {selectedCustomer.email}
+                </p>
               </div>
 
               <div>
@@ -583,21 +698,29 @@ const AdminUserManagement = () => {
               </div>
 
               <div>
-                <p className="text-xs text-gray-400">Registration Date</p>
+                <p className="text-xs text-gray-400">
+                  Registration Date
+                </p>
                 <p className="mt-1 text-gray-700">
                   {formatDate(selectedCustomer.date_joined)}
                 </p>
               </div>
 
               <div>
-                <p className="text-xs text-gray-400">Email Verification</p>
+                <p className="text-xs text-gray-400">
+                  Email Verification
+                </p>
                 <p className="mt-1 text-gray-700">
-                  {selectedCustomer.is_email_verified ? "Verified" : "Pending"}
+                  {selectedCustomer.is_email_verified
+                    ? "Verified"
+                    : "Pending"}
                 </p>
               </div>
 
               <div>
-                <p className="text-xs text-gray-400">Account Status</p>
+                <p className="text-xs text-gray-400">
+                  Account Status
+                </p>
                 <p className="mt-1 font-medium text-[#1B3B2B]">
                   {getCustomerStatus(selectedCustomer)}
                 </p>
@@ -605,7 +728,9 @@ const AdminUserManagement = () => {
 
               {selectedCustomer.blocked_at && (
                 <div>
-                  <p className="text-xs text-gray-400">Blocked Date</p>
+                  <p className="text-xs text-gray-400">
+                    Blocked Date
+                  </p>
                   <p className="mt-1 text-gray-700">
                     {formatDate(selectedCustomer.blocked_at)}
                   </p>
@@ -623,6 +748,183 @@ const AdminUserManagement = () => {
           </div>
         </div>
       )}
+
+      {/* Premium SPEQ Block / Unblock Confirmation Modal */}
+      {confirmCustomer && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#101810]/55 p-4 backdrop-blur-sm animate-[fadeIn_0.25s_ease-out]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirmation-title"
+        >
+          <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#EAE5D9] bg-[#FDFCF9] shadow-[0_25px_80px_rgba(0,0,0,0.22)] animate-[modalEnter_0.3s_ease-out]">
+
+            {/* Decorative top accent */}
+            <div className="h-1.5 w-full bg-gradient-to-r from-[#1B3B2B] via-[#B99A5B] to-[#1B3B2B]" />
+
+            <div className="p-7 sm:p-8">
+
+              {/* Modal heading */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+
+                  <div
+                    className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${
+                      confirmCustomer.is_blocked
+                        ? "bg-[#E8EFE9] text-[#1B3B2B]"
+                        : "bg-[#FCEBE8] text-[#B9473D]"
+                    }`}
+                  >
+                    {confirmCustomer.is_blocked ? (
+                      <ShieldCheck size={27} strokeWidth={1.7} />
+                    ) : (
+                      <ShieldAlert size={27} strokeWidth={1.7} />
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#B99A5B]">
+                      SPEQ Eyewear
+                    </p>
+
+                    <h2
+                      id="confirmation-title"
+                      className="font-serif text-2xl font-medium text-[#1B3B2B]"
+                    >
+                      {confirmCustomer.is_blocked
+                        ? "Unblock Customer?"
+                        : "Block Customer?"}
+                    </h2>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={actionLoading !== null}
+                  onClick={closeConfirmation}
+                  className="rounded-full p-2 text-[#8B8B80] transition hover:bg-[#F0EEE7] hover:text-[#1B3B2B] disabled:opacity-40"
+                  aria-label="Close confirmation"
+                >
+                  <X size={19} />
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div className="my-6 h-px bg-[#EAE5D9]" />
+
+              {/* Customer information */}
+              <div className="flex items-center gap-3 rounded-xl border border-[#EAE5D9] bg-white p-4">
+
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#E8E1D2] font-serif text-lg font-semibold text-[#1B3B2B]">
+                  {confirmCustomer.full_name
+                    ?.charAt(0)
+                    ?.toUpperCase() || "C"}
+                </div>
+
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-[#252720]">
+                    {confirmCustomer.full_name || "Unnamed Customer"}
+                  </p>
+
+                  <p className="mt-1 truncate text-xs text-[#929187]">
+                    {confirmCustomer.email}
+                  </p>
+                </div>
+
+                <span
+                  className={`ml-auto shrink-0 rounded-full px-3 py-1 text-[10px] font-semibold ${
+                    confirmCustomer.is_blocked
+                      ? "bg-[#E8EFE9] text-[#1B3B2B]"
+                      : "bg-[#FCEBE8] text-[#B9473D]"
+                  }`}
+                >
+                  {confirmCustomer.is_blocked ? "BLOCKED" : "ACTIVE"}
+                </span>
+              </div>
+
+              {/* Confirmation description */}
+              <div className="mt-5">
+                <p className="text-sm leading-7 text-[#5F6259]">
+                  {confirmCustomer.is_blocked
+                    ? "Are you sure you want to restore account access for this customer?"
+                    : "Are you sure you want to restrict this customer's account access?"}
+                </p>
+
+                <div className="mt-4 flex items-start gap-3 rounded-xl bg-[#F3F0E8] p-4">
+                  <ShieldAlert
+                    size={17}
+                    className="mt-0.5 shrink-0 text-[#B99A5B]"
+                  />
+
+                  <p className="text-xs leading-6 text-[#77766D]">
+                    {confirmCustomer.is_blocked
+                      ? "The customer will be able to access their SPEQ account again after this action."
+                      : "The customer will not be able to access their SPEQ account until an administrator unblocks it."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Backend action error */}
+              {actionError && (
+                <div
+                  role="alert"
+                  className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-xs leading-5 text-red-700"
+                >
+                  {actionError}
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row">
+
+                <button
+                  type="button"
+                  disabled={actionLoading !== null}
+                  onClick={closeConfirmation}
+                  className="flex-1 rounded-xl border border-[#DEDACF] bg-white px-5 py-3.5 text-sm font-medium text-[#5D6057] transition duration-200 hover:border-[#1B3B2B] hover:bg-[#F8F7F2] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  disabled={actionLoading !== null}
+                  onClick={confirmStatusChange}
+                  className={`flex-1 rounded-xl px-5 py-3.5 text-sm font-semibold text-white shadow-sm transition duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 ${
+                    confirmCustomer.is_blocked
+                      ? "bg-[#1B3B2B] shadow-[#1B3B2B]/15 hover:bg-[#274D39]"
+                      : "bg-[#B9473D] shadow-red-900/10 hover:bg-[#A83D34]"
+                  }`}
+                >
+                  {actionLoading === confirmCustomer.id ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <LoaderCircle
+                        size={16}
+                        className="animate-spin"
+                      />
+
+                      {confirmCustomer.is_blocked
+                        ? "Unblocking..."
+                        : "Blocking..."}
+                    </span>
+                  ) : confirmCustomer.is_blocked ? (
+                    "Confirm Unblock"
+                  ) : (
+                    "Confirm Block"
+                  )}
+                </button>
+              </div>
+
+              {/* Modal footer */}
+              <p className="mt-5 text-center text-[10px] tracking-wide text-[#AAA79D]">
+                SPEQ EYEWEAR · CUSTOMER MANAGEMENT
+              </p>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

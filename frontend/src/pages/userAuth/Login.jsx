@@ -18,13 +18,15 @@ import "./RecoveryModal.css";
 import GoogleLoginButton from "../../components/GoogleLoginButton";
 import { API_BASE } from "../../utils/api";
 
+const FORGOT_OTP_STORAGE_KEY = "customerForgotPasswordOTP";
+const RESET_SESSION_STORAGE_KEY = "customerPasswordResetSession";
+
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
   const otpInputRefs = useRef([]);
 
-  // Message received after signup or another redirect.
   const successMessage = location.state?.message || "";
 
   // Login form states.
@@ -45,21 +47,74 @@ const Login = () => {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
-  // OTP resend states.
-  const [otpTimeLeft, setOtpTimeLeft] = useState(60);
+  // OTP expiry and resend states.
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpTimeLeft, setOtpTimeLeft] = useState(0);
   const [isResendingOtp, setIsResendingOtp] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
 
-  // OTP countdown timer.
+  // Restore pending forgot-password OTP after a page reload.
   useEffect(() => {
-    if (!isOtpSent || otpTimeLeft <= 0) return;
+    const savedFlow = sessionStorage.getItem(FORGOT_OTP_STORAGE_KEY);
 
-    const timer = setInterval(() => {
-      setOtpTimeLeft((previous) => Math.max(previous - 1, 0));
-    }, 1000);
+    if (!savedFlow) {
+      return;
+    }
+
+    try {
+      const parsedFlow = JSON.parse(savedFlow);
+      const expiryTimestamp = new Date(parsedFlow.expires_at).getTime();
+
+      if (
+        parsedFlow.purpose !== "password_reset" ||
+        !parsedFlow.email ||
+        !parsedFlow.expires_at ||
+        !Number.isFinite(expiryTimestamp)
+      ) {
+        sessionStorage.removeItem(FORGOT_OTP_STORAGE_KEY);
+        return;
+      }
+
+      setRecoveryEmail(parsedFlow.email);
+      setIsOtpSent(true);
+      setIsForgotModalOpen(true);
+      setOtpExpiresAt(parsedFlow.expires_at);
+
+      setOtpTimeLeft(
+        Math.max(
+          0,
+          Math.ceil((expiryTimestamp - Date.now()) / 1000)
+        )
+      );
+    } catch (error) {
+      console.error("Unable to restore recovery OTP:", error);
+      sessionStorage.removeItem(FORGOT_OTP_STORAGE_KEY);
+    }
+  }, []);
+
+  // Keep the countdown synchronized with the backend expiry timestamp.
+  useEffect(() => {
+    if (!isOtpSent || !otpExpiresAt) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiryTimestamp = new Date(otpExpiresAt).getTime();
+
+      const remainingSeconds = Math.max(
+        0,
+        Math.ceil((expiryTimestamp - Date.now()) / 1000)
+      );
+
+      setOtpTimeLeft(remainingSeconds);
+    };
+
+    updateCountdown();
+
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
-  }, [isOtpSent, otpTimeLeft]);
+  }, [isOtpSent, otpExpiresAt]);
 
   // Extract a readable error message from backend responses.
   const getErrorMessage = (data, fallbackMessage) => {
@@ -70,11 +125,16 @@ const Login = () => {
     }
 
     if (Array.isArray(data)) {
-      return data.map((item) => getErrorMessage(item, "")).filter(Boolean).join(" ");
+      return data
+        .map((item) => getErrorMessage(item, ""))
+        .filter(Boolean)
+        .join(" ");
     }
 
     if (typeof data === "object") {
-      if (data.detail) return getErrorMessage(data.detail, fallbackMessage);
+      if (data.detail) {
+        return getErrorMessage(data.detail, fallbackMessage);
+      }
 
       if (data.non_field_errors) {
         return getErrorMessage(data.non_field_errors, fallbackMessage);
@@ -82,11 +142,34 @@ const Login = () => {
 
       for (const value of Object.values(data)) {
         const message = getErrorMessage(value, "");
+
         if (message) return message;
       }
     }
 
     return fallbackMessage;
+  };
+
+  // Save pending OTP details in sessionStorage.
+  const saveForgotPasswordFlow = (emailAddress, expiresAt) => {
+    const flow = {
+      purpose: "password_reset",
+      email: emailAddress,
+      expires_at: expiresAt,
+    };
+
+    sessionStorage.setItem(
+      FORGOT_OTP_STORAGE_KEY,
+      JSON.stringify(flow)
+    );
+  };
+
+  // Validate the backend OTP expiry timestamp.
+  const isValidExpiry = (expiresAt) => {
+    return (
+      Boolean(expiresAt) &&
+      Number.isFinite(new Date(expiresAt).getTime())
+    );
   };
 
   // Login handler.
@@ -146,7 +229,9 @@ const Login = () => {
     setRecoveryError("");
     setResendMessage("");
 
-    if (!recoveryEmail.trim()) {
+    const normalizedEmail = recoveryEmail.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       setRecoveryError("Please enter your registered email.");
       return;
     }
@@ -162,7 +247,7 @@ const Login = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: recoveryEmail.trim(),
+            email: normalizedEmail,
           }),
         }
       );
@@ -175,10 +260,33 @@ const Login = () => {
         );
       }
 
-      // Display the OTP verification section.
+      // The backend must return the actual OTP expiry timestamp.
+      if (!isValidExpiry(data.expires_at)) {
+        throw new Error(
+          "The server did not return a valid OTP expiry time. Please check the backend response."
+        );
+      }
+
+      // Persist the pending OTP flow.
+      saveForgotPasswordFlow(
+        data.email || normalizedEmail,
+        data.expires_at
+      );
+
+      setRecoveryEmail(data.email || normalizedEmail);
+      setOtpExpiresAt(data.expires_at);
+      setOtpTimeLeft(
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(data.expires_at).getTime() - Date.now()) / 1000
+          )
+        )
+      );
+
       setIsOtpSent(true);
+      setIsForgotModalOpen(true);
       setOtp("");
-      setOtpTimeLeft(60);
       setResendMessage("");
       setRecoveryError("");
 
@@ -194,7 +302,9 @@ const Login = () => {
 
   // Resend password reset OTP.
   const handleResendOtp = async () => {
-    if (otpTimeLeft > 0 || isResendingOtp) return;
+    if (otpTimeLeft > 0 || isResendingOtp || isVerifyingOtp) {
+      return;
+    }
 
     setIsResendingOtp(true);
     setResendMessage("");
@@ -209,7 +319,7 @@ const Login = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: recoveryEmail.trim(),
+            email: recoveryEmail.trim().toLowerCase(),
           }),
         }
       );
@@ -222,9 +332,30 @@ const Login = () => {
         );
       }
 
-      setOtp("");
-      setOtpTimeLeft(60);
+      if (!isValidExpiry(data.expires_at)) {
+        throw new Error(
+          "The server did not return a valid OTP expiry time."
+        );
+      }
 
+      const updatedEmail = data.email || recoveryEmail.trim().toLowerCase();
+
+      // Update the stored OTP flow only after successful resend.
+      saveForgotPasswordFlow(updatedEmail, data.expires_at);
+
+      setRecoveryEmail(updatedEmail);
+      setOtpExpiresAt(data.expires_at);
+
+      setOtpTimeLeft(
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(data.expires_at).getTime() - Date.now()) / 1000
+          )
+        )
+      );
+
+      setOtp("");
       setResendMessage(
         data.message || "A new OTP has been sent to your email."
       );
@@ -251,6 +382,11 @@ const Login = () => {
       return;
     }
 
+    if (otpTimeLeft <= 0) {
+      setRecoveryError("OTP has expired. Please request a new OTP.");
+      return;
+    }
+
     setIsVerifyingOtp(true);
 
     try {
@@ -262,7 +398,7 @@ const Login = () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            email: recoveryEmail.trim(),
+            email: recoveryEmail.trim().toLowerCase(),
             otp,
           }),
         }
@@ -282,11 +418,29 @@ const Login = () => {
         );
       }
 
+      // Save the reset session so a refresh does not lose the token.
+      const resetSession = {
+        purpose: "password_reset",
+        email: data.email || recoveryEmail.trim().toLowerCase(),
+        reset_token: data.reset_token,
+        expires_at: data.reset_token_expires_at || null,
+      };
+
+      sessionStorage.setItem(
+        RESET_SESSION_STORAGE_KEY,
+        JSON.stringify(resetSession)
+      );
+
+      // The OTP flow is complete. Remove its stored details.
+      sessionStorage.removeItem(FORGOT_OTP_STORAGE_KEY);
+
       // Navigate to reset password page.
       navigate("/reset-password", {
+        replace: true,
         state: {
-          email: recoveryEmail.trim(),
-          resetToken: data.reset_token,
+          email: resetSession.email,
+          resetToken: resetSession.reset_token,
+          resetTokenExpiresAt: resetSession.expires_at,
         },
       });
     } catch (error) {
@@ -298,15 +452,10 @@ const Login = () => {
     }
   };
 
-  // Close and reset the recovery modal.
+  // Close the modal without deleting the pending OTP flow.
+  // This allows the flow to be restored after a page reload.
   const closeRecoveryModal = () => {
     setIsForgotModalOpen(false);
-    setRecoveryEmail("");
-    setRecoveryError("");
-    setOtp("");
-    setIsOtpSent(false);
-    setOtpTimeLeft(60);
-    setResendMessage("");
   };
 
   return (
@@ -481,7 +630,7 @@ const Login = () => {
               <span></span>
             </div>
 
-            {/* GOOGLE LOGIN - UNCHANGED */}
+            {/* GOOGLE LOGIN */}
             <div className="google-login">
               <GoogleLoginButton />
             </div>
@@ -654,7 +803,7 @@ const Login = () => {
                       type="button"
                       className="resend-otp-button"
                       onClick={handleResendOtp}
-                      disabled={isResendingOtp}
+                      disabled={isResendingOtp || isVerifyingOtp}
                     >
                       {isResendingOtp ? "SENDING..." : "RESEND OTP"}
                     </button>
@@ -670,7 +819,12 @@ const Login = () => {
                 <button
                   type="submit"
                   className="recovery-submit"
-                  disabled={isVerifyingOtp || otp.length !== 6}
+                  disabled={
+                    isVerifyingOtp ||
+                    isResendingOtp ||
+                    otp.length !== 6 ||
+                    otpTimeLeft <= 0
+                  }
                 >
                   {isVerifyingOtp ? "Verifying..." : "Verify OTP"}
                   {!isVerifyingOtp && <ArrowRight size={18} />}

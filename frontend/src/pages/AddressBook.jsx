@@ -6,7 +6,6 @@ import {
   Pencil,
   Trash2,
   ShieldCheck,
-  Star,
   X,
   UserRound,
   Phone,
@@ -16,7 +15,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 
-import ProfileNavbar from "../components/ProfileNavbar";
+
 import ProfileSidebar from "../components/ProfileSidebar";
 import { API_BASE } from "../utils/api";
 
@@ -71,6 +70,17 @@ const getErrorMessage = (data) => {
   const messages = getErrorMessages(data);
 
   return messages[0] || "Please check the entered details.";
+};
+
+// Reusable input styling based on validation state.
+const getInputClass = (hasError, readOnly = false) => {
+  return `w-full rounded-lg border px-4 py-3 text-sm text-[#172B3A] outline-none transition-colors duration-200 ${
+    hasError
+      ? "border-red-500 bg-red-50/50 focus:border-red-500 focus:ring-2 focus:ring-red-100"
+      : "border-[#d7e2ea] bg-[#F5F8FB] focus:border-[#426782] focus:ring-2 focus:ring-[#426782]/20"
+  } ${
+    readOnly ? "cursor-not-allowed bg-[#EAF2F8] text-[#8295A5]" : ""
+  }`;
 };
 
 const AddressBook = () => {
@@ -364,8 +374,8 @@ const AddressBook = () => {
 
         setFormErrors(backendErrors);
 
-        const generalError = data.detail ||
-          data.non_field_errors?.[0];
+        const generalError =
+          data.detail || data.non_field_errors?.[0];
 
         if (!Object.keys(backendErrors).length) {
           setFormError(
@@ -474,30 +484,37 @@ const AddressBook = () => {
     if (!formErrors[fieldName]) return null;
 
     return (
-      <p className="mt-1 text-xs text-red-600">
+      <p
+        className="mt-1.5 flex items-center gap-1 text-xs text-red-600"
+        role="alert"
+      >
+        <AlertCircle size={13} />
         {formErrors[fieldName]}
       </p>
     );
   };
 
   return (
-    <div className="min-h-screen bg-[#fbfaf7] text-[#292929]">
-      <ProfileNavbar />
+    <div className="min-h-screen bg-[#EAF2F8] text-[#172B3A]">
+
 
       {/* Toast Notification */}
       {toast && (
         <div
           role="status"
-          className={`fixed right-5 top-5 z-[100] flex max-w-sm items-center gap-3 rounded-xl px-5 py-4 shadow-xl ${
+          className={`fixed right-5 top-5 z-[100] flex max-w-sm items-center gap-3 rounded-xl border px-5 py-4 shadow-xl ${
             toast.type === "error"
-              ? "bg-[#8f2929] text-white"
-              : "bg-[#202020] text-white"
+              ? "border-red-200 bg-[#8f2929] text-white"
+              : "border-[#d7e2ea] bg-white text-[#172B3A]"
           }`}
         >
           {toast.type === "error" ? (
             <AlertCircle size={19} />
           ) : (
-            <CheckCircle2 size={19} />
+            <CheckCircle2
+              size={19}
+              className="text-[#426782]"
+            />
           )}
 
           <p className="text-sm">{toast.message}</p>
@@ -506,7 +523,7 @@ const AddressBook = () => {
             type="button"
             onClick={() => setToast(null)}
             aria-label="Close notification"
-            className="ml-2"
+            className="ml-2 rounded-full p-1 transition-colors duration-200 hover:bg-[#EAF2F8]"
           >
             <X size={16} />
           </button>
@@ -516,10 +533,10 @@ const AddressBook = () => {
       <main className="mx-auto max-w-[1440px] px-5 py-8 sm:px-8 lg:px-10 lg:py-12">
 
         {/* Profile Summary */}
-        <section className="mb-9 rounded-2xl border border-[#ece9e2] bg-white p-6 shadow-[0_4px_20px_rgba(0,0,0,0.025)] sm:p-8">
+        <section className="mb-9 rounded-2xl border border-[#d7e2ea] bg-white p-6 shadow-[0_4px_24px_rgba(23,43,58,0.05)] sm:p-8">
           <div className="flex flex-col items-start justify-between gap-6 sm:flex-row sm:items-center">
             <div className="flex items-center gap-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#e9e3d8] bg-[#f2eee7]">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#d7e2ea] bg-[#EAF2F8]">
                 {profile?.profile_picture ? (
                   <img
                     src={profile.profile_picture}
@@ -529,27 +546,27 @@ const AddressBook = () => {
                 ) : (
                   <UserRound
                     size={28}
-                    className="text-[#8d806e]"
+                    className="text-[#426782]"
                   />
                 )}
               </div>
 
               <div>
-                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a88962]">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#426782]">
                   Your Account
                 </p>
 
-                <h1 className="font-serif text-2xl text-[#252525] sm:text-3xl">
+                <h1 className="font-serif text-2xl text-[#172B3A] sm:text-3xl">
                   {profile?.full_name || "Your Profile"}
                 </h1>
 
-                <div className="mt-2 flex items-center gap-1.5 text-xs text-[#777]">
+                <div className="mt-2 flex items-center gap-1.5 text-xs text-[#8295A5]">
                   <ShieldCheck
                     size={14}
                     className={
                       profile?.is_email_verified
-                        ? "text-[#8d704d]"
-                        : "text-gray-400"
+                        ? "text-[#426782]"
+                        : "text-[#8295A5]"
                     }
                   />
 
@@ -561,22 +578,22 @@ const AddressBook = () => {
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <div className="min-w-[125px] rounded-xl bg-[#fbfaf7] px-5 py-4">
-                <p className="text-[10px] uppercase tracking-[0.13em] text-[#888]">
+              <div className="min-w-[125px] rounded-xl border border-[#e3ebf1] bg-[#F5F8FB] px-5 py-4">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-[#8295A5]">
                   Saved Addresses
                 </p>
 
-                <p className="mt-1 font-serif text-2xl">
+                <p className="mt-1 font-serif text-2xl text-[#172B3A]">
                   {addresses.length.toString().padStart(2, "0")}
                 </p>
               </div>
 
-              <div className="min-w-[125px] rounded-xl bg-[#fbfaf7] px-5 py-4">
-                <p className="text-[10px] uppercase tracking-[0.13em] text-[#888]">
+              <div className="min-w-[125px] rounded-xl border border-[#e3ebf1] bg-[#F5F8FB] px-5 py-4">
+                <p className="text-[10px] uppercase tracking-[0.13em] text-[#8295A5]">
                   Account Status
                 </p>
 
-                <p className="mt-1 text-sm font-medium">
+                <p className="mt-1 text-sm font-medium text-[#172B3A]">
                   {profile?.is_email_verified
                     ? "Verified"
                     : "Pending"}
@@ -604,16 +621,16 @@ const AddressBook = () => {
             <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="font-serif text-3xl text-[#252525] sm:text-4xl">
+                  <h2 className="font-serif text-3xl text-[#172B3A] sm:text-4xl">
                     Address Book
                   </h2>
 
-                  <span className="rounded-full bg-[#efede8] px-3 py-1 text-xs font-medium text-[#666]">
+                  <span className="rounded-full border border-[#d7e2ea] bg-[#EAF2F8] px-3 py-1 text-xs font-medium text-[#426782]">
                     {addresses.length} Saved
                   </span>
                 </div>
 
-                <p className="mt-3 max-w-xl text-sm leading-6 text-[#777]">
+                <p className="mt-3 max-w-xl text-sm leading-6 text-[#8295A5]">
                   Manage your primary delivery locations and
                   bespoke atelier delivery destinations.
                 </p>
@@ -622,7 +639,7 @@ const AddressBook = () => {
               <button
                 type="button"
                 onClick={openAddModal}
-                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-black px-6 py-3 text-sm font-medium text-white transition hover:bg-[#333]"
+                className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#172B3A] px-6 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#263B4B] hover:shadow-md"
               >
                 <Plus size={17} />
                 Add New Address
@@ -631,9 +648,9 @@ const AddressBook = () => {
 
             {/* Loading */}
             {loading && (
-              <div className="flex min-h-[250px] items-center justify-center rounded-2xl border border-[#ece9e2] bg-white">
+              <div className="flex min-h-[250px] items-center justify-center rounded-2xl border border-[#d7e2ea] bg-white">
                 <LoaderCircle
-                  className="animate-spin text-[#9b805e]"
+                  className="animate-spin text-[#426782]"
                   size={28}
                 />
               </div>
@@ -654,7 +671,7 @@ const AddressBook = () => {
                 <button
                   type="button"
                   onClick={() => window.location.reload()}
-                  className="mt-4 rounded-full bg-black px-5 py-2 text-sm text-white"
+                  className="mt-4 rounded-full bg-[#172B3A] px-5 py-2 text-sm text-white transition-colors duration-200 hover:bg-[#263B4B]"
                 >
                   Try Again
                 </button>
@@ -663,19 +680,19 @@ const AddressBook = () => {
 
             {/* Empty State */}
             {!loading && !pageError && addresses.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-[#dcd7ce] bg-white px-6 py-16 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#f5f2ec]">
+              <div className="rounded-2xl border border-dashed border-[#c5d5e1] bg-white px-6 py-16 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-[#EAF2F8]">
                   <MapPin
                     size={25}
-                    className="text-[#927957]"
+                    className="text-[#426782]"
                   />
                 </div>
 
-                <h3 className="mt-5 font-serif text-2xl">
+                <h3 className="mt-5 font-serif text-2xl text-[#172B3A]">
                   No Saved Addresses
                 </h3>
 
-                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#888]">
+                <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-[#8295A5]">
                   Add your first delivery address to make your
                   next purchase easier.
                 </p>
@@ -683,7 +700,7 @@ const AddressBook = () => {
                 <button
                   type="button"
                   onClick={openAddModal}
-                  className="mt-6 rounded-full bg-black px-6 py-3 text-sm text-white transition hover:bg-[#333]"
+                  className="mt-6 rounded-full bg-[#172B3A] px-6 py-3 text-sm text-white transition-colors duration-200 hover:bg-[#263B4B] hover:shadow-md"
                 >
                   Add Your First Address
                 </button>
@@ -696,18 +713,18 @@ const AddressBook = () => {
                 {addresses.map((address) => (
                   <article
                     key={address.id}
-                    className="overflow-hidden rounded-2xl border border-[#ece9e2] bg-white shadow-[0_3px_18px_rgba(0,0,0,0.025)]"
+                    className="overflow-hidden rounded-2xl border border-[#d7e2ea] bg-white shadow-[0_3px_18px_rgba(23,43,58,0.035)] transition-shadow duration-200 hover:shadow-[0_8px_28px_rgba(23,43,58,0.08)]"
                   >
                     <div className="p-6 sm:p-7">
 
                       {/* Card Header */}
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         {address.is_default ? (
-                          <span className="rounded-md bg-black px-3 py-1.5 text-[10px] font-semibold tracking-[0.13em] text-white">
+                          <span className="rounded-md bg-[#172B3A] px-3 py-1.5 text-[10px] font-semibold tracking-[0.13em] text-white">
                             DEFAULT SHIPPING
                           </span>
                         ) : (
-                          <span className="rounded-md bg-[#f0eee9] px-3 py-1.5 text-[10px] font-semibold tracking-[0.13em] text-[#777]">
+                          <span className="rounded-md bg-[#EAF2F8] px-3 py-1.5 text-[10px] font-semibold tracking-[0.13em] text-[#426782]">
                             SECONDARY ADDRESS
                           </span>
                         )}
@@ -715,14 +732,14 @@ const AddressBook = () => {
                         {address.is_default ? (
                           <ShieldCheck
                             size={21}
-                            className="text-[#8b7556]"
+                            className="text-[#426782]"
                           />
                         ) : (
                           <button
                             type="button"
                             disabled={actionLoading}
                             onClick={() => handleSetDefault(address)}
-                            className="text-[10px] font-semibold tracking-[0.12em] text-[#8b7556] transition hover:text-black disabled:opacity-50"
+                            className="text-[10px] font-semibold tracking-[0.12em] text-[#426782] transition-colors duration-200 hover:text-[#172B3A] disabled:opacity-50"
                           >
                             SET AS DEFAULT
                           </button>
@@ -730,11 +747,11 @@ const AddressBook = () => {
                       </div>
 
                       {/* Address Details */}
-                      <h3 className="mt-5 font-serif text-2xl text-[#252525]">
+                      <h3 className="mt-5 font-serif text-2xl text-[#172B3A]">
                         {address.full_name}
                       </h3>
 
-                      <div className="mt-3 space-y-1.5 text-sm leading-6 text-[#777]">
+                      <div className="mt-3 space-y-1.5 text-sm leading-6 text-[#8295A5]">
                         <p>{address.address_line1}</p>
 
                         {address.address_line2 && (
@@ -749,21 +766,21 @@ const AddressBook = () => {
                         <p>{address.country}</p>
                       </div>
 
-                      <div className="mt-4 flex items-center gap-2 text-sm text-[#555]">
+                      <div className="mt-4 flex items-center gap-2 text-sm text-[#426782]">
                         <Phone
                           size={15}
-                          className="text-[#a88962]"
+                          className="text-[#C5AE87]"
                         />
                         {address.phone}
                       </div>
                     </div>
 
                     {/* Card Actions */}
-                    <div className="flex flex-wrap items-center justify-end gap-5 border-t border-[#eeece7] bg-[#f8f7f4] px-6 py-4 sm:px-7">
+                    <div className="flex flex-wrap items-center justify-end gap-5 border-t border-[#e3ebf1] bg-[#F5F8FB] px-6 py-4 sm:px-7">
                       <button
                         type="button"
                         onClick={() => openEditModal(address)}
-                        className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.1em] text-[#555] transition hover:text-black"
+                        className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.1em] text-[#426782] transition-colors duration-200 hover:text-[#172B3A]"
                       >
                         <Pencil size={14} />
                         EDIT
@@ -772,7 +789,7 @@ const AddressBook = () => {
                       <button
                         type="button"
                         onClick={() => openDeleteModal(address)}
-                        className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.1em] text-[#9b4545] transition hover:text-red-700"
+                        className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.1em] text-[#9b4545] transition-colors duration-200 hover:text-red-700"
                       >
                         <Trash2 size={14} />
                         REMOVE
@@ -789,7 +806,7 @@ const AddressBook = () => {
       {/* Add / Edit Address Modal */}
       {modalOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 px-4 py-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-[#172B3A]/55 px-4 py-6 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) {
               closeAddressModal();
@@ -800,18 +817,18 @@ const AddressBook = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="address-modal-title"
-            className="my-auto w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
+            className="my-auto w-full max-w-2xl rounded-2xl border border-[#d7e2ea] bg-white p-6 shadow-2xl sm:p-8"
           >
             {/* Modal Header */}
             <div className="mb-6 flex items-start justify-between">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#a88962]">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#426782]">
                   Your Delivery Details
                 </p>
 
                 <h2
                   id="address-modal-title"
-                  className="mt-2 font-serif text-3xl"
+                  className="mt-2 font-serif text-3xl text-[#172B3A]"
                 >
                   {editingAddress
                     ? "Edit Address"
@@ -824,30 +841,39 @@ const AddressBook = () => {
                 onClick={closeAddressModal}
                 disabled={saving}
                 aria-label="Close modal"
-                className="rounded-full p-2 text-[#777] transition hover:bg-[#f3f1ec] hover:text-black"
+                className="rounded-full p-2 text-[#8295A5] transition-colors duration-200 hover:bg-[#EAF2F8] hover:text-[#172B3A]"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveAddress}>
+            {/* noValidate disables browser popups.
+                React validateForm handles all validation instead. */}
+            <form onSubmit={handleSaveAddress} noValidate>
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
 
                 {/* Full Name */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     Full Name *
                   </label>
 
                   <input
                     name="full_name"
+                    type="text"
                     value={formData.full_name}
                     onChange={handleChange}
-                    required
                     maxLength={150}
                     placeholder="Enter full name"
                     aria-invalid={Boolean(formErrors.full_name)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    aria-describedby={
+                      formErrors.full_name
+                        ? "full_name-error"
+                        : undefined
+                    }
+                    className={getInputClass(
+                      formErrors.full_name
+                    )}
                   />
 
                   {renderFieldError("full_name")}
@@ -855,7 +881,7 @@ const AddressBook = () => {
 
                 {/* Phone */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     Phone Number *
                   </label>
 
@@ -865,11 +891,17 @@ const AddressBook = () => {
                     inputMode="numeric"
                     value={formData.phone}
                     onChange={handleChange}
-                    required
                     maxLength={10}
                     placeholder="Enter 10-digit mobile number"
                     aria-invalid={Boolean(formErrors.phone)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    aria-describedby={
+                      formErrors.phone
+                        ? "phone-error"
+                        : undefined
+                    }
+                    className={getInputClass(
+                      formErrors.phone
+                    )}
                   />
 
                   {renderFieldError("phone")}
@@ -877,19 +909,26 @@ const AddressBook = () => {
 
                 {/* Address Line 1 */}
                 <div className="sm:col-span-2">
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     Street Address *
                   </label>
 
                   <input
                     name="address_line1"
+                    type="text"
                     value={formData.address_line1}
                     onChange={handleChange}
-                    required
                     maxLength={255}
                     placeholder="House number, street name, area"
                     aria-invalid={Boolean(formErrors.address_line1)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    aria-describedby={
+                      formErrors.address_line1
+                        ? "address_line1-error"
+                        : undefined
+                    }
+                    className={getInputClass(
+                      formErrors.address_line1
+                    )}
                   />
 
                   {renderFieldError("address_line1")}
@@ -897,38 +936,46 @@ const AddressBook = () => {
 
                 {/* Address Line 2 */}
                 <div className="sm:col-span-2">
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     Apartment / Landmark
-                    <span className="ml-1 text-[#999]">
+                    <span className="ml-1 text-[#8295A5]">
                       (Optional)
                     </span>
                   </label>
 
                   <input
                     name="address_line2"
+                    type="text"
                     value={formData.address_line2}
                     onChange={handleChange}
                     maxLength={255}
                     placeholder="Apartment, suite, landmark"
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    aria-invalid={Boolean(formErrors.address_line2)}
+                    className={getInputClass(
+                      formErrors.address_line2
+                    )}
                   />
+
+                  {renderFieldError("address_line2")}
                 </div>
 
                 {/* City */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     City *
                   </label>
 
                   <input
                     name="city"
+                    type="text"
                     value={formData.city}
                     onChange={handleChange}
-                    required
                     maxLength={100}
                     placeholder="City"
                     aria-invalid={Boolean(formErrors.city)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    className={getInputClass(
+                      formErrors.city
+                    )}
                   />
 
                   {renderFieldError("city")}
@@ -936,19 +983,21 @@ const AddressBook = () => {
 
                 {/* State */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     State *
                   </label>
 
                   <input
                     name="state"
+                    type="text"
                     value={formData.state}
                     onChange={handleChange}
-                    required
                     maxLength={100}
                     placeholder="State"
                     aria-invalid={Boolean(formErrors.state)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    className={getInputClass(
+                      formErrors.state
+                    )}
                   />
 
                   {renderFieldError("state")}
@@ -956,7 +1005,7 @@ const AddressBook = () => {
 
                 {/* PIN Code */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     PIN Code *
                   </label>
 
@@ -966,11 +1015,12 @@ const AddressBook = () => {
                     inputMode="numeric"
                     value={formData.postal_code}
                     onChange={handleChange}
-                    required
                     maxLength={6}
                     placeholder="6-digit PIN code"
                     aria-invalid={Boolean(formErrors.postal_code)}
-                    className="w-full rounded-lg border border-[#e5e2dc] px-4 py-3 text-sm outline-none transition focus:border-[#a88962]"
+                    className={getInputClass(
+                      formErrors.postal_code
+                    )}
                   />
 
                   {renderFieldError("postal_code")}
@@ -978,7 +1028,7 @@ const AddressBook = () => {
 
                 {/* Country */}
                 <div>
-                  <label className="mb-2 block text-xs font-medium text-[#555]">
+                  <label className="mb-2 block text-xs font-medium text-[#426782]">
                     Country *
                   </label>
 
@@ -987,7 +1037,11 @@ const AddressBook = () => {
                     name="country"
                     value="India"
                     readOnly
-                    className="w-full rounded-lg border border-[#e5e2dc] bg-gray-100 px-4 py-3 text-sm outline-none"
+                    aria-invalid={Boolean(formErrors.country)}
+                    className={getInputClass(
+                      formErrors.country,
+                      true
+                    )}
                   />
 
                   {renderFieldError("country")}
@@ -995,21 +1049,21 @@ const AddressBook = () => {
               </div>
 
               {/* Default Address Toggle */}
-              <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-xl bg-[#f8f7f4] p-4">
+              <label className="mt-6 flex cursor-pointer items-center gap-3 rounded-xl border border-[#e3ebf1] bg-[#F5F8FB] p-4 transition-colors duration-200 hover:bg-[#EAF2F8]">
                 <input
                   type="checkbox"
                   name="is_default"
                   checked={formData.is_default}
                   onChange={handleChange}
-                  className="h-4 w-4 accent-black"
+                  className="h-4 w-4 accent-[#172B3A]"
                 />
 
                 <span>
-                  <span className="block text-sm font-medium text-[#333]">
+                  <span className="block text-sm font-medium text-[#172B3A]">
                     Set as default shipping address
                   </span>
 
-                  <span className="mt-1 block text-xs text-[#888]">
+                  <span className="mt-1 block text-xs text-[#8295A5]">
                     Use this address as your primary delivery location.
                   </span>
                 </span>
@@ -1017,18 +1071,25 @@ const AddressBook = () => {
 
               {/* General Error */}
               {formError && (
-                <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600">
+                <div
+                  role="alert"
+                  className="mt-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600"
+                >
+                  <AlertCircle
+                    size={17}
+                    className="mt-0.5 shrink-0"
+                  />
                   {formError}
                 </div>
               )}
 
               {/* Modal Buttons */}
-              <div className="mt-7 flex flex-col-reverse justify-end gap-3 border-t border-[#eeece7] pt-5 sm:flex-row">
+              <div className="mt-7 flex flex-col-reverse justify-end gap-3 border-t border-[#e3ebf1] pt-5 sm:flex-row">
                 <button
                   type="button"
                   onClick={closeAddressModal}
                   disabled={saving}
-                  className="rounded-full px-6 py-3 text-sm text-[#777] transition hover:bg-[#f5f4f1]"
+                  className="rounded-full px-6 py-3 text-sm text-[#426782] transition-colors duration-200 hover:bg-[#EAF2F8] hover:text-[#172B3A]"
                 >
                   Cancel
                 </button>
@@ -1036,7 +1097,7 @@ const AddressBook = () => {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-black px-7 py-3 text-sm font-medium text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-[#172B3A] px-7 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#263B4B] hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {saving && (
                     <LoaderCircle
@@ -1059,12 +1120,12 @@ const AddressBook = () => {
 
       {/* Delete Confirmation Modal */}
       {deleteModalOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#172B3A]/55 px-4 backdrop-blur-sm">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-modal-title"
-            className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl"
+            className="w-full max-w-md rounded-2xl border border-[#d7e2ea] bg-white p-7 text-center shadow-2xl"
           >
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-50">
               <AlertTriangle
@@ -1075,18 +1136,18 @@ const AddressBook = () => {
 
             <h2
               id="delete-modal-title"
-              className="mt-5 font-serif text-2xl text-[#252525]"
+              className="mt-5 font-serif text-2xl text-[#172B3A]"
             >
               Remove Address?
             </h2>
 
-            <p className="mt-3 text-sm leading-6 text-[#777]">
+            <p className="mt-3 text-sm leading-6 text-[#8295A5]">
               Are you sure you want to remove this address?
               This action cannot be undone.
             </p>
 
             {selectedAddress && (
-              <p className="mt-3 text-sm font-medium text-[#444]">
+              <p className="mt-3 text-sm font-medium text-[#426782]">
                 {selectedAddress.full_name} · {selectedAddress.city}
               </p>
             )}
@@ -1099,7 +1160,7 @@ const AddressBook = () => {
                   setDeleteModalOpen(false);
                   setSelectedAddress(null);
                 }}
-                className="rounded-full bg-[#f1f0ed] px-6 py-3 text-sm text-[#555] transition hover:bg-[#e8e6e1]"
+                className="rounded-full bg-[#EAF2F8] px-6 py-3 text-sm text-[#426782] transition-colors duration-200 hover:bg-[#dce8f0] hover:text-[#172B3A]"
               >
                 Cancel
               </button>
@@ -1108,7 +1169,7 @@ const AddressBook = () => {
                 type="button"
                 disabled={actionLoading}
                 onClick={handleDeleteAddress}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#a33131] px-6 py-3 text-sm font-medium text-white transition hover:bg-[#852626] disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#a33131] px-6 py-3 text-sm font-medium text-white transition-colors duration-200 hover:bg-[#852626] disabled:opacity-60"
               >
                 {actionLoading && (
                   <LoaderCircle
@@ -1124,63 +1185,7 @@ const AddressBook = () => {
         </div>
       )}
 
-      {/* Footer */}
-      <footer className="mt-12 border-t border-[#e9e7e2] bg-white">
-        <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-8 px-5 py-12 sm:px-8 md:grid-cols-4 lg:px-10">
-          <div>
-            <h3 className="font-serif text-2xl font-semibold tracking-[0.15em]">
-              SPEQ
-            </h3>
 
-            <p className="mt-3 max-w-xs text-xs leading-6 text-[#888]">
-              A considered approach to eyewear. Crafted for clarity,
-              designed for everyday distinction.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-[0.14em]">
-              Explore
-            </h4>
-
-            <div className="mt-4 space-y-3 text-xs text-[#888]">
-              <p>New Arrivals</p>
-              <p>Collections</p>
-              <p>Optical</p>
-              <p>Sun</p>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-[0.14em]">
-              Client Care
-            </h4>
-
-            <div className="mt-4 space-y-3 text-xs text-[#888]">
-              <p>Contact Us</p>
-              <p>Shipping & Returns</p>
-              <p>FAQs</p>
-              <p>Track Order</p>
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-[0.14em]">
-              Information
-            </h4>
-
-            <div className="mt-4 space-y-3 text-xs text-[#888]">
-              <p>Privacy Policy</p>
-              <p>Terms & Conditions</p>
-              <p>About SPEQ</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-[#eeece7] px-5 py-5 text-center text-[11px] text-[#999]">
-          © {new Date().getFullYear()} SPEQ Eyewear. All rights reserved.
-        </div>
-      </footer>
     </div>
   );
 };

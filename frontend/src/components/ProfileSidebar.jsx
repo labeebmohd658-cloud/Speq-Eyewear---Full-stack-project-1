@@ -34,26 +34,27 @@ const ProfileSidebar = ({ activeItem = "Personal Information" }) => {
 
   // Handle user logout.
   const handleLogout = () => {
-    // Remove JWT tokens from localStorage.
     localStorage.removeItem("access");
     localStorage.removeItem("refresh");
 
-    // Redirect to login page.
     navigate("/login", { replace: true });
   };
 
   return (
-    <aside className="w-full rounded-2xl border border-[#e9e7e2] bg-white p-5 shadow-[0_2px_12px_rgba(0,0,0,0.025)]">
-      <div className="border-b border-[#eeece7] px-3 pb-5">
-        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#a88962]">
+    <aside className="w-full rounded-2xl border border-[#D8E3EB] bg-white p-5 shadow-[0_4px_20px_rgba(23,43,58,0.04)]">
+
+      {/* Sidebar Heading */}
+      <div className="border-b border-[#E5EDF3] px-3 pb-5">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#426782]">
           Account Menu
         </p>
 
-        <h2 className="mt-2 text-base font-semibold text-[#292d32]">
+        <h2 className="mt-2 text-base font-semibold text-[#172B3A]">
           Manage Account
         </h2>
       </div>
 
+      {/* Navigation Items */}
       <nav className="mt-5 flex flex-col gap-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
@@ -68,28 +69,41 @@ const ProfileSidebar = ({ activeItem = "Personal Information" }) => {
                   navigate(routes[item.label]);
                 }
               }}
-              className={`flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition ${
+              aria-current={active ? "page" : undefined}
+              className={`group flex w-full items-center justify-between rounded-xl px-3 py-3 text-left text-sm transition-colors duration-200 ${
                 active
-                  ? "bg-black font-semibold text-white"
-                  : "text-[#686868] hover:bg-[#f8f7f4] hover:text-[#292d32]"
+                  ? "bg-[#172B3A] font-semibold text-white"
+                  : "text-[#526879] hover:bg-[#EAF2F8] hover:text-[#172B3A]"
               }`}
             >
               <span className="flex items-center gap-3">
-                <Icon size={18} strokeWidth={1.7} />
+                <Icon
+                  size={18}
+                  strokeWidth={1.7}
+                  className={`transition-colors duration-200 ${
+                    active
+                      ? "text-white"
+                      : "text-[#8295A5] group-hover:text-[#426782]"
+                  }`}
+                />
+
                 {item.label}
               </span>
 
-              {active && <ChevronRight size={16} />}
+              {active && (
+                <ChevronRight size={16} className="text-white/80" />
+              )}
             </button>
           );
         })}
       </nav>
 
-      <div className="mt-6 border-t border-[#eeece7] pt-5">
+      {/* Logout */}
+      <div className="mt-6 border-t border-[#E5EDF3] pt-5">
         <button
           type="button"
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-red-600 transition hover:bg-red-50"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm text-red-500 transition-colors duration-200 hover:bg-red-50 hover:text-red-700"
         >
           <LogOut size={18} strokeWidth={1.7} />
           Sign Out

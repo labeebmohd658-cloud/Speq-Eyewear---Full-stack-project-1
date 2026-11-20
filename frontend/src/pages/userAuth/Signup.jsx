@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from "react";
 import "./Auth.css";
 import { useNavigate, Link } from "react-router-dom";
@@ -13,6 +14,9 @@ import {
 
 import GoogleLoginButton from "../../components/GoogleLoginButton";
 import { API_BASE } from "../../utils/api";
+
+// Storage key for the customer's pending signup OTP flow.
+const SIGNUP_OTP_STORAGE_KEY = "customerSignupOTP";
 
 function Signup() {
   const navigate = useNavigate();
@@ -42,49 +46,103 @@ function Signup() {
   const [otpError, setOtpError] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
 
-  // OTP timer and resend state.
-  const [otpTimeLeft, setOtpTimeLeft] = useState(60);
-  const [otpTimerVersion, setOtpTimerVersion] = useState(0);
+  // OTP expiry and timer state.
+  const [otpExpiresAt, setOtpExpiresAt] = useState(null);
+  const [otpTimeLeft, setOtpTimeLeft] = useState(0);
+
   const [isVerifying, setIsVerifying] = useState(false);
   const [isResending, setIsResending] = useState(false);
 
-  // Start a 60-second timer whenever OTP is sent or resent.
+  // Restore the pending signup OTP flow after a page reload.
   useEffect(() => {
-    if (!isOtpModalOpen) return;
+    const savedFlow = sessionStorage.getItem(SIGNUP_OTP_STORAGE_KEY);
 
-    setOtpTimeLeft(60);
+    if (!savedFlow) {
+      return;
+    }
 
-    const timer = setInterval(() => {
-      setOtpTimeLeft((previousTime) => {
-        if (previousTime <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
+    try {
+      const parsedFlow = JSON.parse(savedFlow);
 
-        return previousTime - 1;
-      });
-    }, 1000);
+      const expiryTimestamp = new Date(
+        parsedFlow.expires_at
+      ).getTime();
+
+      // Validate the stored OTP information.
+      if (
+        parsedFlow.purpose !== "email_verification" ||
+        !parsedFlow.email ||
+        !parsedFlow.expires_at ||
+        !Number.isFinite(expiryTimestamp)
+      ) {
+        sessionStorage.removeItem(SIGNUP_OTP_STORAGE_KEY);
+        return;
+      }
+
+      // Restore the email and OTP modal.
+      setFormData((previousData) => ({
+        ...previousData,
+        email: parsedFlow.email,
+      }));
+
+      setOtpExpiresAt(parsedFlow.expires_at);
+
+      // Calculate remaining time using the backend expiry timestamp.
+      const remainingSeconds = Math.max(
+        0,
+        Math.ceil((expiryTimestamp - Date.now()) / 1000)
+      );
+
+      setOtpTimeLeft(remainingSeconds);
+      setIsOtpModalOpen(true);
+    } catch (error) {
+      console.error("Unable to restore signup OTP flow:", error);
+
+      // Remove corrupted storage data.
+      sessionStorage.removeItem(SIGNUP_OTP_STORAGE_KEY);
+    }
+  }, []);
+
+  // Keep the OTP countdown synchronized with the actual expiry time.
+  useEffect(() => {
+    if (!isOtpModalOpen || !otpExpiresAt) {
+      return;
+    }
+
+    const updateCountdown = () => {
+      const expiryTimestamp = new Date(otpExpiresAt).getTime();
+
+      const remainingSeconds = Math.max(
+        0,
+        Math.ceil((expiryTimestamp - Date.now()) / 1000)
+      );
+
+      setOtpTimeLeft(remainingSeconds);
+    };
+
+    updateCountdown();
+
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
-  }, [isOtpModalOpen, otpTimerVersion]);
+  }, [isOtpModalOpen, otpExpiresAt]);
 
   // Convert backend validation errors into readable messages.
   const getErrorMessages = (error) => {
     if (!error) return [];
 
-    // Handle multiple validation messages.
     if (Array.isArray(error)) {
       return error.flatMap((item) => getErrorMessages(item));
     }
 
-    // Handle normal string messages.
     if (typeof error === "string") {
       return [error];
     }
 
-    // Handle nested error objects.
     if (typeof error === "object") {
-      return Object.values(error).flatMap((item) => getErrorMessages(item));
+      return Object.values(error).flatMap((item) =>
+        getErrorMessages(item)
+      );
     }
 
     return [String(error)];
@@ -110,12 +168,36 @@ function Signup() {
       return;
     }
 
+    // If the user changes the email of a closed pending OTP flow,
+    // remove the old flow so it does not reopen for the wrong email.
+    if (name === "email") {
+      const savedFlow = sessionStorage.getItem(
+        SIGNUP_OTP_STORAGE_KEY
+      );
+
+      if (savedFlow) {
+        try {
+          const parsedFlow = JSON.parse(savedFlow);
+
+          if (
+            value.trim().toLowerCase() !==
+            parsedFlow.email?.trim().toLowerCase()
+          ) {
+            sessionStorage.removeItem(SIGNUP_OTP_STORAGE_KEY);
+            setOtpExpiresAt(null);
+            setOtpTimeLeft(0);
+          }
+        } catch {
+          sessionStorage.removeItem(SIGNUP_OTP_STORAGE_KEY);
+        }
+      }
+    }
+
     setFormData((previousData) => ({
       ...previousData,
       [name]: value,
     }));
 
-    // Clear the corresponding error when the user edits a field.
     setErrors((previousErrors) => ({
       ...previousErrors,
       [name]: undefined,
@@ -143,7 +225,8 @@ function Signup() {
     const email = formData.email.trim();
 
     if (name.length < 3 || !/^[A-Za-z ]+$/.test(name)) {
-      newErrors.full_name = "Enter a valid full name with at least 3 letters.";
+      newErrors.full_name =
+        "Enter a valid full name with at least 3 letters.";
     }
 
     if (!email) {
@@ -156,7 +239,6 @@ function Signup() {
       newErrors.phone = "Phone number must contain exactly 10 digits.";
     }
 
-    // Password must satisfy all backend password requirements.
     if (formData.password.length < 8) {
       newErrors.password = "Password must contain at least 8 characters.";
     } else if (!/[A-Z]/.test(formData.password)) {
@@ -174,6 +256,7 @@ function Signup() {
     } else if (formData.password !== formData.confirm_password) {
       newErrors.confirm_password = "Passwords do not match.";
     }
+
     setErrors(newErrors);
 
     return Object.keys(newErrors).length === 0;
@@ -192,6 +275,8 @@ function Signup() {
     setIsSubmitting(true);
 
     try {
+      const normalizedEmail = formData.email.trim().toLowerCase();
+
       const response = await fetch(`${API_BASE}/auth/signup/`, {
         method: "POST",
         headers: {
@@ -199,7 +284,7 @@ function Signup() {
         },
         body: JSON.stringify({
           full_name: formData.full_name.trim(),
-          email: formData.email.trim().toLowerCase(),
+          email: normalizedEmail,
           phone: formData.phone,
           password: formData.password,
           confirm_password: formData.confirm_password,
@@ -209,7 +294,6 @@ function Signup() {
       const data = await response.json();
 
       if (!response.ok) {
-        // Handle backend field validation errors.
         const knownFields = [
           "full_name",
           "email",
@@ -235,19 +319,61 @@ function Signup() {
             data.detail ||
               data.message ||
               data.non_field_errors?.[0] ||
-              "Unable to create account. Please try again.",
+              "Unable to create account. Please try again."
           );
         }
 
         return;
       }
 
-      // Signup successful. Open OTP verification modal.
+      // The backend must provide the actual OTP expiry timestamp.
+      const email = data.email || normalizedEmail;
+      const expiresAt = data.expires_at;
+      const expiryTimestamp = new Date(expiresAt).getTime();
+
+      if (!expiresAt || !Number.isFinite(expiryTimestamp)) {
+        setGeneralError(
+          "Your account was created, but the server did not return a valid OTP expiry time. Please contact support."
+        );
+        return;
+      }
+
+      // Save only the pending OTP flow.
+      // Never store the password or actual OTP.
+      const signupOTPFlow = {
+        purpose: "email_verification",
+        email,
+        expires_at: expiresAt,
+      };
+
+      try {
+        sessionStorage.setItem(
+          SIGNUP_OTP_STORAGE_KEY,
+          JSON.stringify(signupOTPFlow)
+        );
+      } catch (storageError) {
+        console.error("Unable to save signup OTP flow:", storageError);
+      }
+
+      // Update email and OTP modal.
+      setFormData((previousData) => ({
+        ...previousData,
+        email,
+      }));
+
+      setOtpExpiresAt(expiresAt);
+
+      setOtpTimeLeft(
+        Math.max(
+          0,
+          Math.ceil((expiryTimestamp - Date.now()) / 1000)
+        )
+      );
+
       setErrors({});
       setOtp("");
       setOtpError("");
       setOtpMessage("");
-
       setIsOtpModalOpen(true);
     } catch (error) {
       console.error("Signup error:", error);
@@ -292,12 +418,21 @@ function Signup() {
 
       if (!response.ok) {
         setOtpError(
-          data.otp || data.email || data.detail || "OTP verification failed.",
+          data.otp ||
+            data.email ||
+            data.detail ||
+            "OTP verification failed."
         );
         return;
       }
 
-      // Navigate to login ONLY after successful verification.
+      // Clear the pending signup flow after successful verification.
+      sessionStorage.removeItem(SIGNUP_OTP_STORAGE_KEY);
+
+      setOtpExpiresAt(null);
+      setOtpTimeLeft(0);
+
+      // Navigate only after successful verification.
       navigate("/login", {
         replace: true,
         state: {
@@ -340,16 +475,50 @@ function Signup() {
         setOtpError(
           data.email ||
             data.detail ||
-            "Unable to resend OTP. Please try again.",
+            "Unable to resend OTP. Please try again."
         );
         return;
       }
 
-      // Stay on the OTP page after resending.
-      setOtp("");
-      setOtpTimerVersion((previousVersion) => previousVersion + 1);
+      // Use the new expiry timestamp returned by the backend.
+      const expiresAt = data.expires_at;
+      const expiryTimestamp = new Date(expiresAt).getTime();
 
-      setOtpMessage(data.message || "A new OTP has been sent to your email.");
+      if (!expiresAt || !Number.isFinite(expiryTimestamp)) {
+        setOtpError(
+          "A new OTP may have been sent, but the server did not return a valid expiry time. Please try again."
+        );
+        return;
+      }
+
+      const updatedFlow = {
+        purpose: "email_verification",
+        email: data.email || formData.email.trim().toLowerCase(),
+        expires_at: expiresAt,
+      };
+
+      try {
+        sessionStorage.setItem(
+          SIGNUP_OTP_STORAGE_KEY,
+          JSON.stringify(updatedFlow)
+        );
+      } catch (storageError) {
+        console.error("Unable to update signup OTP flow:", storageError);
+      }
+
+      setOtp("");
+      setOtpExpiresAt(expiresAt);
+
+      setOtpTimeLeft(
+        Math.max(
+          0,
+          Math.ceil((expiryTimestamp - Date.now()) / 1000)
+        )
+      );
+
+      setOtpMessage(
+        data.message || "A new OTP has been sent to your email."
+      );
     } catch (error) {
       console.error("Resend OTP error:", error);
       setOtpError("Unable to connect to the server.");
@@ -647,7 +816,9 @@ function Signup() {
 
               {otpError && <p className="field-error">{otpError}</p>}
 
-              {otpMessage && <p className="success-message">{otpMessage}</p>}
+              {otpMessage && (
+                <p className="success-message">{otpMessage}</p>
+              )}
 
               {/* Timer and resend */}
               <div className="otp-meta">

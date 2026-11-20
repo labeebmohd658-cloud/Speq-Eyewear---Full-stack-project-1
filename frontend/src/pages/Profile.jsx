@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import {
   ShieldCheck,
@@ -12,9 +13,23 @@ import {
   ImagePlus,
 } from "lucide-react";
 
-import ProfileNavbar from "../components/ProfileNavbar";
+
 import ProfileSidebar from "../components/ProfileSidebar";
 import { API_BASE, apiRequest } from "../utils/api";
+
+// Session storage keys.
+const EMAIL_CHANGE_STORAGE_KEY = "customerEmailChangeOTP";
+const PASSWORD_CHANGE_STORAGE_KEY = "customerPasswordChangeOTP";
+
+// Reusable Arctic Premium styles.
+const fieldClass =
+  "h-13 w-full rounded-lg border border-[#D8E3EB] bg-[#F5F9FC] px-4 text-sm text-[#172B3A] outline-none transition-colors duration-200 placeholder:text-[#8295A5] focus:border-[#426782] focus:ring-2 focus:ring-[#426782]/15";
+
+const primaryButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-full bg-[#172B3A] px-7 py-3 text-xs font-medium text-white transition-colors duration-200 hover:bg-[#426782] disabled:cursor-not-allowed disabled:opacity-50";
+
+const secondaryButtonClass =
+  "rounded-full border border-[#D8E3EB] bg-white px-7 py-3 text-xs font-medium text-[#526879] transition-colors duration-200 hover:bg-[#EAF2F8] hover:text-[#172B3A] disabled:opacity-50";
 
 // Get the first two initials from the user's name.
 const getInitials = (name) => {
@@ -42,16 +57,69 @@ const getErrorMessages = (error) => {
   }
 
   if (typeof error === "object") {
-    return Object.values(error).flatMap((item) => getErrorMessages(item));
+    return Object.values(error).flatMap((item) =>
+      getErrorMessages(item)
+    );
   }
 
   return [String(error)];
 };
 
+// Safely read a saved verification flow.
+const readSavedFlow = (key) => {
+  try {
+    const saved = sessionStorage.getItem(key);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    sessionStorage.removeItem(key);
+    return null;
+  }
+};
+
+// Save verification metadata.
+const saveFlow = (key, data) => {
+  try {
+    sessionStorage.setItem(key, JSON.stringify(data));
+  } catch (error) {
+    console.error("Could not save verification session:", error);
+  }
+};
+
+// Remove a saved verification flow.
+const clearFlow = (key) => {
+  sessionStorage.removeItem(key);
+};
+
+// Calculate remaining resend time from an absolute timestamp.
+const getRemainingSeconds = (timestamp) => {
+  if (!timestamp) return 0;
+
+  const expiryTime = new Date(timestamp).getTime();
+
+  if (Number.isNaN(expiryTime)) return 0;
+
+  return Math.max(
+    0,
+    Math.ceil((expiryTime - Date.now()) / 1000)
+  );
+};
+
+// Check whether a token expiry timestamp has passed.
+const isTimestampExpired = (timestamp) => {
+  if (!timestamp) return false;
+
+  const expiryTime = new Date(timestamp).getTime();
+
+  return (
+    !Number.isNaN(expiryTime) &&
+    expiryTime <= Date.now()
+  );
+};
+
 // Reusable modal wrapper.
 const Modal = ({ title, subtitle, onClose, children }) => (
   <div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+    className="fixed inset-0 z-50 flex items-center justify-center bg-[#172B3A]/55 p-4 backdrop-blur-sm"
     onMouseDown={(e) => {
       if (e.target === e.currentTarget) onClose();
     }}
@@ -59,12 +127,15 @@ const Modal = ({ title, subtitle, onClose, children }) => (
     <div
       role="dialog"
       aria-modal="true"
-      className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
+      className="w-full max-w-md rounded-2xl border border-[#D8E3EB] bg-white p-6 shadow-[0_20px_60px_rgba(23,43,58,0.2)] sm:p-8"
     >
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h2 className="font-serif text-2xl text-[#29251f]">{title}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-[#81776B]">
+          <h2 className="text-2xl font-semibold text-[#172B3A]">
+            {title}
+          </h2>
+
+          <p className="mt-2 text-sm leading-relaxed text-[#8295A5]">
             {subtitle}
           </p>
         </div>
@@ -73,7 +144,7 @@ const Modal = ({ title, subtitle, onClose, children }) => (
           type="button"
           onClick={onClose}
           aria-label="Close modal"
-          className="rounded-full p-2 text-gray-500 hover:bg-gray-100"
+          className="rounded-full p-2 text-[#8295A5] transition-colors duration-200 hover:bg-[#EAF2F8] hover:text-[#172B3A]"
         >
           <X size={19} />
         </button>
@@ -117,7 +188,8 @@ const Profile = () => {
   const [emailError, setEmailError] = useState("");
 
   // Email OTP resend states.
-  const [emailOtpTimeLeft, setEmailOtpTimeLeft] = useState(60);
+  const [emailOtpTimeLeft, setEmailOtpTimeLeft] = useState(0);
+  const [emailOtpResendAt, setEmailOtpResendAt] = useState(null);
   const [isResendingEmailOtp, setIsResendingEmailOtp] = useState(false);
   const [emailOtpResendMessage, setEmailOtpResendMessage] = useState("");
 
@@ -132,31 +204,138 @@ const Profile = () => {
   const [passwordError, setPasswordError] = useState("");
 
   // Password OTP resend states.
-  const [passwordOtpTimeLeft, setPasswordOtpTimeLeft] = useState(60);
+  const [passwordOtpTimeLeft, setPasswordOtpTimeLeft] = useState(0);
+  const [passwordOtpResendAt, setPasswordOtpResendAt] = useState(null);
   const [isResendingPasswordOtp, setIsResendingPasswordOtp] = useState(false);
   const [passwordOtpResendMessage, setPasswordOtpResendMessage] = useState("");
 
-  // Run the email OTP countdown while the email verification step is active.
+  // Restore email-change and password-change sessions after a reload.
   useEffect(() => {
-    if (emailStep !== 2) return;
+    const savedEmailFlow = readSavedFlow(EMAIL_CHANGE_STORAGE_KEY);
 
-    const timer = setInterval(() => {
-      setEmailOtpTimeLeft((previous) => Math.max(previous - 1, 0));
-    }, 1000);
+    if (savedEmailFlow?.purpose === "email_change") {
+      if (
+        savedEmailFlow.step === 2 &&
+        savedEmailFlow.new_email
+      ) {
+        setNewEmail(savedEmailFlow.new_email);
+        setEmailStep(2);
+        setEmailOtp("");
+        setEmailOtpResendAt(
+          savedEmailFlow.resend_available_at || null
+        );
+        setShowEmailModal(true);
+      } else if (
+        savedEmailFlow.step === 3 &&
+        savedEmailFlow.new_email &&
+        savedEmailFlow.reset_token
+      ) {
+        if (
+          isTimestampExpired(
+            savedEmailFlow.reset_token_expires_at
+          )
+        ) {
+          clearFlow(EMAIL_CHANGE_STORAGE_KEY);
+
+          setNewEmail(savedEmailFlow.new_email);
+          setEmailStep(1);
+          setEmailError(
+            "Your verification session expired. Please request a new OTP."
+          );
+          setShowEmailModal(true);
+        } else {
+          setNewEmail(savedEmailFlow.new_email);
+          setEmailResetToken(savedEmailFlow.reset_token);
+          setEmailStep(3);
+          setShowEmailModal(true);
+        }
+      } else {
+        clearFlow(EMAIL_CHANGE_STORAGE_KEY);
+      }
+    } else if (savedEmailFlow) {
+      clearFlow(EMAIL_CHANGE_STORAGE_KEY);
+    }
+
+    const savedPasswordFlow = readSavedFlow(
+      PASSWORD_CHANGE_STORAGE_KEY
+    );
+
+    if (savedPasswordFlow?.purpose === "password_change") {
+      if (savedPasswordFlow.step === 2) {
+        setPasswordStep(2);
+        setPasswordOtp("");
+        setPasswordOtpResendAt(
+          savedPasswordFlow.resend_available_at || null
+        );
+        setShowPasswordModal(true);
+      } else if (
+        savedPasswordFlow.step === 3 &&
+        savedPasswordFlow.reset_token
+      ) {
+        if (
+          isTimestampExpired(
+            savedPasswordFlow.reset_token_expires_at
+          )
+        ) {
+          clearFlow(PASSWORD_CHANGE_STORAGE_KEY);
+
+          setPasswordStep(1);
+          setPasswordError(
+            "Your verification session expired. Please request a new OTP."
+          );
+          setShowPasswordModal(true);
+        } else {
+          setPasswordResetToken(savedPasswordFlow.reset_token);
+          setPasswordStep(3);
+          setShowPasswordModal(true);
+        }
+      } else {
+        clearFlow(PASSWORD_CHANGE_STORAGE_KEY);
+      }
+    } else if (savedPasswordFlow) {
+      clearFlow(PASSWORD_CHANGE_STORAGE_KEY);
+    }
+  }, []);
+
+  // Email OTP resend countdown.
+  useEffect(() => {
+    if (!emailOtpResendAt) {
+      setEmailOtpTimeLeft(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      setEmailOtpTimeLeft(
+        getRemainingSeconds(emailOtpResendAt)
+      );
+    };
+
+    updateCountdown();
+
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
-  }, [emailStep]);
+  }, [emailOtpResendAt]);
 
-  // Run the password OTP countdown while the password verification step is active.
+  // Password OTP resend countdown.
   useEffect(() => {
-    if (passwordStep !== 2) return;
+    if (!passwordOtpResendAt) {
+      setPasswordOtpTimeLeft(0);
+      return;
+    }
 
-    const timer = setInterval(() => {
-      setPasswordOtpTimeLeft((previous) => Math.max(previous - 1, 0));
-    }, 1000);
+    const updateCountdown = () => {
+      setPasswordOtpTimeLeft(
+        getRemainingSeconds(passwordOtpResendAt)
+      );
+    };
+
+    updateCountdown();
+
+    const timer = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(timer);
-  }, [passwordStep]);
+  }, [passwordOtpResendAt]);
 
   // Automatically remove notifications after 3 seconds.
   useEffect(() => {
@@ -182,7 +361,8 @@ const Profile = () => {
 
     if (!response.ok) {
       const messages = getErrorMessages(data);
-      const message = messages[0] || "Something went wrong. Please try again.";
+      const message =
+        messages[0] || "Something went wrong. Please try again.";
 
       throw new Error(message);
     }
@@ -230,7 +410,10 @@ const Profile = () => {
 
     setFormData((previous) => ({
       ...previous,
-      [name]: name === "phone" ? value.replace(/\D/g, "").slice(0, 10) : value,
+      [name]:
+        name === "phone"
+          ? value.replace(/\D/g, "").slice(0, 10)
+          : value,
     }));
   };
 
@@ -248,27 +431,36 @@ const Profile = () => {
     }
 
     if (formData.phone && !/^[6-9]\d{9}$/.test(formData.phone)) {
-      showToast("Enter a valid 10-digit Indian mobile number.", "error");
+      showToast(
+        "Enter a valid 10-digit Indian mobile number.",
+        "error"
+      );
       return;
     }
 
     const trimmedName = formData.full_name.trim();
 
     if (trimmedName.length < 3) {
-      showToast("Full name must contain at least 3 characters.", "error");
+      showToast(
+        "Full name must contain at least 3 characters.",
+        "error"
+      );
       return;
     }
 
     if (!/^[A-Za-z][A-Za-z\s'-]*$/.test(trimmedName)) {
       showToast(
         "Full name can contain only letters, spaces, hyphens and apostrophes.",
-        "error",
+        "error"
       );
       return;
     }
 
     if (trimmedName.replace(/[^A-Za-z]/g, "").length < 3) {
-      showToast("Full name must contain at least 3 letters.", "error");
+      showToast(
+        "Full name must contain at least 3 letters.",
+        "error"
+      );
       return;
     }
 
@@ -320,10 +512,17 @@ const Profile = () => {
 
     if (!image) return;
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
 
     if (!allowedTypes.includes(image.type)) {
-      showToast("Only JPG, PNG and WEBP images are allowed.", "error");
+      showToast(
+        "Only JPG, PNG and WEBP images are allowed.",
+        "error"
+      );
       e.target.value = "";
       return;
     }
@@ -347,12 +546,13 @@ const Profile = () => {
       const uploadData = new FormData();
       uploadData.append("profile_picture", image);
 
-      // Do not manually set Content-Type for FormData.
-      // The browser must add the multipart boundary.
-      const response = await apiRequest("/auth/profile/upload-picture/", {
-        method: "POST",
-        body: uploadData,
-      });
+      const response = await apiRequest(
+        "/auth/profile/upload-picture/",
+        {
+          method: "POST",
+          body: uploadData,
+        }
+      );
 
       const data = await readResponse(response);
 
@@ -372,6 +572,8 @@ const Profile = () => {
 
   // Reset and close email modal.
   const closeEmailModal = () => {
+    clearFlow(EMAIL_CHANGE_STORAGE_KEY);
+
     setShowEmailModal(false);
     setNewEmail("");
     setEmailOtp("");
@@ -379,7 +581,8 @@ const Profile = () => {
     setEmailStep(1);
     setEmailError("");
 
-    setEmailOtpTimeLeft(60);
+    setEmailOtpTimeLeft(0);
+    setEmailOtpResendAt(null);
     setEmailOtpResendMessage("");
     setIsResendingEmailOtp(false);
   };
@@ -388,14 +591,19 @@ const Profile = () => {
   const handleEmailRequest = async () => {
     setEmailError("");
 
-    if (!newEmail.trim()) {
+    const normalizedEmail = newEmail.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       setEmailError("Please enter your new email address.");
       return;
     }
 
-    if (newEmail.trim().toLowerCase() === profile.email?.trim().toLowerCase()) {
+    if (
+      normalizedEmail ===
+      profile.email?.trim().toLowerCase()
+    ) {
       setEmailError(
-        "Your new email must be different from your current email.",
+        "Your new email must be different from your current email."
       );
       return;
     }
@@ -403,19 +611,37 @@ const Profile = () => {
     setEmailLoading(true);
 
     try {
-      const response = await apiRequest("/auth/change-email/request-otp/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          new_email: newEmail.trim(),
-        }),
+      const response = await apiRequest(
+        "/auth/change-email/request-otp/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            new_email: normalizedEmail,
+          }),
+        }
+      );
+
+      const data = await readResponse(response);
+
+      const resendAvailableAt = new Date(
+        Date.now() + 60 * 1000
+      ).toISOString();
+
+      saveFlow(EMAIL_CHANGE_STORAGE_KEY, {
+        purpose: "email_change",
+        step: 2,
+        new_email: normalizedEmail,
+        otp_expires_at: data.expires_at || null,
+        resend_available_at: resendAvailableAt,
       });
 
-      await readResponse(response);
-
-      setEmailOtpTimeLeft(60);
+      setNewEmail(normalizedEmail);
+      setEmailOtp("");
+      setEmailResetToken("");
+      setEmailOtpResendAt(resendAvailableAt);
       setEmailOtpResendMessage("");
       setEmailStep(2);
 
@@ -439,17 +665,38 @@ const Profile = () => {
     setEmailLoading(true);
 
     try {
-      const response = await apiRequest("/auth/change-email/verify-otp/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ otp: emailOtp }),
-      });
+      const response = await apiRequest(
+        "/auth/change-email/verify-otp/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            otp: emailOtp,
+          }),
+        }
+      );
 
       const data = await readResponse(response);
 
+      if (!data.reset_token) {
+        throw new Error(
+          "Verification token was not returned by the server."
+        );
+      }
+
+      saveFlow(EMAIL_CHANGE_STORAGE_KEY, {
+        purpose: "email_change",
+        step: 3,
+        new_email: newEmail.trim().toLowerCase(),
+        reset_token: data.reset_token,
+        reset_token_expires_at:
+          data.reset_token_expires_at || null,
+      });
+
       setEmailResetToken(data.reset_token);
+      setEmailOtp("");
       setEmailStep(3);
 
       showToast("Email OTP verified successfully.");
@@ -467,7 +714,7 @@ const Profile = () => {
 
     if (!emailResetToken) {
       setEmailError(
-        "Email verification token is missing. Please verify again.",
+        "Email verification token is missing. Please verify again."
       );
       return;
     }
@@ -475,15 +722,18 @@ const Profile = () => {
     setEmailLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/change-email/confirm/`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          reset_token: emailResetToken,
-        }),
-      });
+      const response = await fetch(
+        `${API_BASE}/auth/change-email/confirm/`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            reset_token: emailResetToken,
+          }),
+        }
+      );
 
       const data = await readResponse(response);
 
@@ -493,7 +743,9 @@ const Profile = () => {
         is_email_verified: true,
       }));
 
+      clearFlow(EMAIL_CHANGE_STORAGE_KEY);
       closeEmailModal();
+
       showToast("Email address changed successfully.");
     } catch (error) {
       setEmailError(error.message);
@@ -504,6 +756,8 @@ const Profile = () => {
 
   // Reset and close password modal.
   const closePasswordModal = () => {
+    clearFlow(PASSWORD_CHANGE_STORAGE_KEY);
+
     setShowPasswordModal(false);
     setPasswordStep(1);
     setPasswordOtp("");
@@ -512,7 +766,8 @@ const Profile = () => {
     setConfirmPassword("");
     setPasswordError("");
 
-    setPasswordOtpTimeLeft(60);
+    setPasswordOtpTimeLeft(0);
+    setPasswordOtpResendAt(null);
     setPasswordOtpResendMessage("");
     setIsResendingPasswordOtp(false);
   };
@@ -523,13 +778,29 @@ const Profile = () => {
     setPasswordLoading(true);
 
     try {
-      const response = await apiRequest("/auth/change-password/send-otp/", {
-        method: "POST",
+      const response = await apiRequest(
+        "/auth/change-password/send-otp/",
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await readResponse(response);
+
+      const resendAvailableAt = new Date(
+        Date.now() + 60 * 1000
+      ).toISOString();
+
+      saveFlow(PASSWORD_CHANGE_STORAGE_KEY, {
+        purpose: "password_change",
+        step: 2,
+        otp_expires_at: data.expires_at || null,
+        resend_available_at: resendAvailableAt,
       });
 
-      await readResponse(response);
-
-      setPasswordOtpTimeLeft(60);
+      setPasswordOtp("");
+      setPasswordResetToken("");
+      setPasswordOtpResendAt(resendAvailableAt);
       setPasswordOtpResendMessage("");
       setPasswordStep(2);
 
@@ -553,19 +824,37 @@ const Profile = () => {
     setPasswordLoading(true);
 
     try {
-      const response = await apiRequest("/auth/change-password/verify-otp/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          otp: passwordOtp,
-        }),
-      });
+      const response = await apiRequest(
+        "/auth/change-password/verify-otp/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            otp: passwordOtp,
+          }),
+        }
+      );
 
       const data = await readResponse(response);
 
+      if (!data.reset_token) {
+        throw new Error(
+          "Verification token was not returned by the server."
+        );
+      }
+
+      saveFlow(PASSWORD_CHANGE_STORAGE_KEY, {
+        purpose: "password_change",
+        step: 3,
+        reset_token: data.reset_token,
+        reset_token_expires_at:
+          data.reset_token_expires_at || null,
+      });
+
       setPasswordResetToken(data.reset_token);
+      setPasswordOtp("");
       setPasswordStep(3);
 
       showToast("Password OTP verified successfully.");
@@ -576,7 +865,7 @@ const Profile = () => {
     }
   };
 
-  // Validate the new password using the same rules as signup/reset password.
+  // Validate the new password.
   const validateNewPassword = () => {
     if (newPassword.length < 8) {
       return "Password must contain at least 8 characters.";
@@ -612,7 +901,7 @@ const Profile = () => {
 
     if (!passwordResetToken) {
       setPasswordError(
-        "Password verification token is missing. Please verify again.",
+        "Password verification token is missing. Please verify again."
       );
       return;
     }
@@ -638,13 +927,17 @@ const Profile = () => {
             reset_token: passwordResetToken,
             new_password: newPassword,
           }),
-        },
+        }
       );
 
       await readResponse(response);
 
+      clearFlow(PASSWORD_CHANGE_STORAGE_KEY);
       closePasswordModal();
-      showToast("Your password has been changed successfully.");
+
+      showToast(
+        "Your password has been changed successfully."
+      );
     } catch (error) {
       setPasswordError(error.message);
     } finally {
@@ -652,29 +945,50 @@ const Profile = () => {
     }
   };
 
-  // Resend email verification OTP after the countdown finishes.
+  // Resend email verification OTP.
   const handleResendEmailOtp = async () => {
-    if (emailOtpTimeLeft > 0 || isResendingEmailOtp) return;
+    if (
+      emailOtpTimeLeft > 0 ||
+      isResendingEmailOtp
+    ) {
+      return;
+    }
 
     setIsResendingEmailOtp(true);
     setEmailOtpResendMessage("");
 
     try {
-      const response = await apiRequest("/auth/change-email/request-otp/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          new_email: newEmail.trim(),
-        }),
-      });
+      const response = await apiRequest(
+        "/auth/change-email/request-otp/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            new_email: newEmail.trim().toLowerCase(),
+          }),
+        }
+      );
 
       const data = await readResponse(response);
 
-      setEmailOtpTimeLeft(60);
+      const resendAvailableAt = new Date(
+        Date.now() + 60 * 1000
+      ).toISOString();
+
+      saveFlow(EMAIL_CHANGE_STORAGE_KEY, {
+        purpose: "email_change",
+        step: 2,
+        new_email: newEmail.trim().toLowerCase(),
+        otp_expires_at: data.expires_at || null,
+        resend_available_at: resendAvailableAt,
+      });
+
+      setEmailOtp("");
+      setEmailOtpResendAt(resendAvailableAt);
       setEmailOtpResendMessage(
-        data.message || "A new verification OTP has been sent.",
+        data.message || "A new verification OTP has been sent."
       );
     } catch (error) {
       setEmailOtpResendMessage(error.message);
@@ -683,23 +997,43 @@ const Profile = () => {
     }
   };
 
-  // Resend password verification OTP after the countdown finishes.
+  // Resend password verification OTP.
   const handleResendPasswordOtp = async () => {
-    if (passwordOtpTimeLeft > 0 || isResendingPasswordOtp) return;
+    if (
+      passwordOtpTimeLeft > 0 ||
+      isResendingPasswordOtp
+    ) {
+      return;
+    }
 
     setIsResendingPasswordOtp(true);
     setPasswordOtpResendMessage("");
 
     try {
-      const response = await apiRequest("/auth/change-password/send-otp/", {
-        method: "POST",
-      });
+      const response = await apiRequest(
+        "/auth/change-password/send-otp/",
+        {
+          method: "POST",
+        }
+      );
 
       const data = await readResponse(response);
 
-      setPasswordOtpTimeLeft(60);
+      const resendAvailableAt = new Date(
+        Date.now() + 60 * 1000
+      ).toISOString();
+
+      saveFlow(PASSWORD_CHANGE_STORAGE_KEY, {
+        purpose: "password_change",
+        step: 2,
+        otp_expires_at: data.expires_at || null,
+        resend_available_at: resendAvailableAt,
+      });
+
+      setPasswordOtp("");
+      setPasswordOtpResendAt(resendAvailableAt);
       setPasswordOtpResendMessage(
-        data.message || "A new password verification OTP has been sent.",
+        data.message || "A new password verification OTP has been sent."
       );
     } catch (error) {
       setPasswordOtpResendMessage(error.message);
@@ -711,61 +1045,75 @@ const Profile = () => {
   const initials = getInitials(profile.full_name);
 
   return (
-    <div className="min-h-screen bg-[#fbfaf7] text-[#29251f]">
-      <ProfileNavbar />
+    <div className="min-h-screen bg-[#EAF2F8] text-[#172B3A]">
+
 
       {/* Floating notification */}
       {toast && (
-        <div className="fixed right-4 top-20 z-[60] w-[calc(100%-2rem)] max-w-sm animate-in slide-in-from-top-3 duration-300">
+        <div className="fixed right-4 top-20 z-[60] w-[calc(100%-2rem)] max-w-sm">
           <div
-            className={`flex items-center gap-3 rounded-xl border bg-white p-4 shadow-xl ${
-              toast.type === "error" ? "border-red-200" : "border-[#eae3d8]"
+            className={`flex items-center gap-3 rounded-xl border bg-white p-4 shadow-[0_8px_30px_rgba(23,43,58,0.12)] ${
+              toast.type === "error"
+                ? "border-red-200"
+                : "border-[#D8E3EB]"
             }`}
           >
             {toast.type === "error" ? (
-              <AlertCircle className="shrink-0 text-red-600" size={20} />
+              <AlertCircle
+                className="shrink-0 text-red-600"
+                size={20}
+              />
             ) : (
-              <CheckCircle2 className="shrink-0 text-green-700" size={20} />
+              <CheckCircle2
+                className="shrink-0 text-[#426782]"
+                size={20}
+              />
             )}
 
-            <p className="flex-1 text-sm text-[#3b342b]">{toast.message}</p>
+            <p className="flex-1 text-sm text-[#172B3A]">
+              {toast.message}
+            </p>
 
             <button
               type="button"
               onClick={() => setToast(null)}
               aria-label="Dismiss notification"
+              className="text-[#8295A5] transition-colors hover:text-[#172B3A]"
             >
-              <X size={17} className="text-gray-400" />
+              <X size={17} />
             </button>
           </div>
         </div>
       )}
 
       <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
+
         {/* Page heading */}
         <div className="mb-8">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#a88962]">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#426782]">
             SpeQ Eyewear / My Account
           </p>
 
-          <h1 className="font-serif text-3xl text-[#29251f] sm:text-4xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-[#172B3A] sm:text-4xl">
             Your Account
           </h1>
 
-          <p className="mt-2 text-sm text-[#81776B]">
+          <p className="mt-2 text-sm text-[#8295A5]">
             Manage your personal information and account preferences.
           </p>
         </div>
 
+        {/* Loading state */}
         {loading && (
-          <div className="flex items-center justify-center gap-3 rounded-2xl bg-white p-12">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#a88962] border-t-transparent" />
-            <span className="text-sm text-gray-500">
+          <div className="flex items-center justify-center gap-3 rounded-2xl border border-[#D8E3EB] bg-white p-12">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#426782] border-t-transparent" />
+            <span className="text-sm text-[#8295A5]">
               Loading your account...
             </span>
           </div>
         )}
 
+        {/* Page error */}
         {!loading && pageError && (
           <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-5">
             <AlertCircle className="text-red-600" size={20} />
@@ -776,11 +1124,12 @@ const Profile = () => {
         {!loading && !pageError && (
           <>
             {/* Customer summary */}
-            <section className="rounded-2xl border border-[#eee9e1] bg-white p-6 shadow-[0_4px_25px_rgba(41,37,31,0.035)] sm:p-8">
+            <section className="rounded-2xl border border-[#D8E3EB] bg-white p-6 shadow-[0_4px_20px_rgba(23,43,58,0.04)] transition-shadow duration-300 hover:shadow-[0_8px_28px_rgba(23,43,58,0.07)] sm:p-8">
               <div className="flex flex-col justify-between gap-7 lg:flex-row lg:items-center">
+
                 <div className="flex items-center gap-5">
                   <div className="relative h-20 w-20 shrink-0">
-                    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#29251f] font-serif text-2xl text-white">
+                    <div className="flex h-full w-full items-center justify-center overflow-hidden rounded-full bg-[#172B3A] text-2xl font-semibold text-white">
                       {profile.profile_picture ? (
                         <img
                           src={profile.profile_picture}
@@ -793,27 +1142,30 @@ const Profile = () => {
                     </div>
 
                     {profile.is_email_verified && (
-                      <div className="absolute -bottom-1 -right-1 rounded-full border-2 border-white bg-[#d8c3a5] p-1">
-                        <ShieldCheck size={17} className="text-[#5b4933]" />
+                      <div className="absolute -bottom-1 -right-1 rounded-full border-2 border-white bg-[#EAF2F8] p-1">
+                        <ShieldCheck
+                          size={17}
+                          className="text-[#426782]"
+                        />
                       </div>
                     )}
                   </div>
 
                   <div className="min-w-0">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a88962]">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#426782]">
                       Personal Account
                     </p>
 
-                    <h2 className="mt-1 truncate font-serif text-2xl text-[#29251f] sm:text-3xl">
+                    <h2 className="mt-1 truncate text-2xl font-semibold text-[#172B3A] sm:text-3xl">
                       {profile.full_name || "Customer"}
                     </h2>
 
-                    <p className="mt-1 break-all text-sm text-[#81776B]">
+                    <p className="mt-1 break-all text-sm text-[#8295A5]">
                       {profile.email}
                     </p>
 
-                    <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#81776B]">
-                      <span className="h-1.5 w-1.5 rounded-full bg-green-600" />
+                    <span className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#526879]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#426782]" />
                       {profile.is_email_verified
                         ? "Verified account"
                         : "Email verification pending"}
@@ -823,22 +1175,32 @@ const Profile = () => {
 
                 {/* Account information */}
                 <div className="grid grid-cols-2 gap-3 lg:w-[340px]">
-                  <div className="rounded-xl bg-[#f7f6f3] p-4">
-                    <p className="text-xs text-[#81776B]">Account Status</p>
-                    <p className="mt-2 font-serif text-xl text-[#29251f]">
+                  <div className="rounded-xl border border-[#D8E3EB] bg-[#F5F9FC] p-4 transition-colors duration-200 hover:bg-[#EAF2F8]">
+                    <p className="text-xs text-[#8295A5]">
+                      Account Status
+                    </p>
+
+                    <p className="mt-2 text-xl font-semibold text-[#172B3A]">
                       Active
                     </p>
-                    <p className="mt-1 text-[10px] text-[#81776B]">
+
+                    <p className="mt-1 text-[10px] text-[#8295A5]">
                       Account access
                     </p>
                   </div>
 
-                  <div className="rounded-xl bg-[#f7f6f3] p-4">
-                    <p className="text-xs text-[#81776B]">Email Status</p>
-                    <p className="mt-2 font-serif text-xl text-[#29251f]">
-                      {profile.is_email_verified ? "Verified" : "Pending"}
+                  <div className="rounded-xl border border-[#D8E3EB] bg-[#F5F9FC] p-4 transition-colors duration-200 hover:bg-[#EAF2F8]">
+                    <p className="text-xs text-[#8295A5]">
+                      Email Status
                     </p>
-                    <p className="mt-1 text-[10px] text-[#81776B]">
+
+                    <p className="mt-2 text-xl font-semibold text-[#172B3A]">
+                      {profile.is_email_verified
+                        ? "Verified"
+                        : "Pending"}
+                    </p>
+
+                    <p className="mt-1 text-[10px] text-[#8295A5]">
                       Primary email
                     </p>
                   </div>
@@ -848,32 +1210,36 @@ const Profile = () => {
 
             {/* Main layout */}
             <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
+
               {/* Sidebar */}
               <aside>
-                <ProfileSidebar />
+                <ProfileSidebar activeItem="Personal Information" />
               </aside>
 
               {/* Profile form */}
-              <section className="min-w-0 overflow-hidden rounded-2xl border border-[#eee9e1] bg-white shadow-[0_4px_25px_rgba(41,37,31,0.035)]">
-                <div className="border-b border-[#eee9e1] px-6 py-7 sm:px-9">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#a88962]">
+              <section className="min-w-0 overflow-hidden rounded-2xl border border-[#D8E3EB] bg-white shadow-[0_4px_20px_rgba(23,43,58,0.04)]">
+
+                {/* Section heading */}
+                <div className="border-b border-[#E5EDF3] px-6 py-7 sm:px-9">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#426782]">
                     Personal Details
                   </p>
 
-                  <h2 className="mt-2 font-serif text-2xl text-[#29251f] sm:text-3xl">
+                  <h2 className="mt-2 text-2xl font-semibold text-[#172B3A] sm:text-3xl">
                     Account Information
                   </h2>
 
-                  <p className="mt-2 text-sm text-[#81776B]">
+                  <p className="mt-2 text-sm text-[#8295A5]">
                     Keep your contact details up to date.
                   </p>
                 </div>
 
                 <form onSubmit={handleSave}>
+
                   {/* Profile picture */}
-                  <div className="flex flex-col items-center border-b border-[#eee9e1] px-6 py-8 sm:px-9">
+                  <div className="flex flex-col items-center border-b border-[#E5EDF3] px-6 py-8 sm:px-9">
                     <div className="relative">
-                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-[#29251f] font-serif text-3xl text-white">
+                      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-2 border-[#D8E3EB] bg-[#172B3A] text-3xl font-semibold text-white">
                         {profile.profile_picture ? (
                           <img
                             src={profile.profile_picture}
@@ -885,8 +1251,8 @@ const Profile = () => {
                         )}
                       </div>
 
-                      <div className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#d8c3a5] p-1.5">
-                        <Pencil size={14} className="text-[#5b4933]" />
+                      <div className="absolute bottom-0 right-0 rounded-full border-2 border-white bg-[#426782] p-1.5">
+                        <Pencil size={14} className="text-white" />
                       </div>
                     </div>
 
@@ -901,14 +1267,19 @@ const Profile = () => {
                     <button
                       type="button"
                       disabled={photoLoading}
-                      onClick={() => fileInputRef.current?.click()}
-                      className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#e8e1d6] px-5 py-2.5 text-xs font-medium text-[#5c5143] transition hover:bg-[#f7f4ef] disabled:opacity-50"
+                      onClick={() =>
+                        fileInputRef.current?.click()
+                      }
+                      className="mt-4 inline-flex items-center gap-2 rounded-full border border-[#D8E3EB] px-5 py-2.5 text-xs font-medium text-[#426782] transition-colors duration-200 hover:border-[#426782] hover:bg-[#EAF2F8] disabled:opacity-50"
                     >
                       <ImagePlus size={15} />
-                      {photoLoading ? "Uploading..." : "Change Photo"}
+
+                      {photoLoading
+                        ? "Uploading..."
+                        : "Change Photo"}
                     </button>
 
-                    <p className="mt-2 text-[10px] text-[#a49a8d]">
+                    <p className="mt-2 text-[10px] text-[#8295A5]">
                       PNG, JPG or WEBP · Maximum 2 MB
                     </p>
                   </div>
@@ -916,11 +1287,12 @@ const Profile = () => {
                   {/* Form fields */}
                   <div className="px-6 py-8 sm:px-9">
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+
                       {/* Full name */}
                       <div>
                         <label
                           htmlFor="full_name"
-                          className="mb-2 block text-[10px] font-semibold tracking-[0.12em] text-[#81776B]"
+                          className="mb-2 block text-[10px] font-semibold tracking-[0.12em] text-[#526879]"
                         >
                           FULL LEGAL NAME
                         </label>
@@ -934,12 +1306,12 @@ const Profile = () => {
                             onChange={handleChange}
                             required
                             placeholder="Enter your full name"
-                            className="h-13 w-full rounded-lg bg-[#f7f6f3] px-4 pr-11 text-sm text-[#29251f] outline-none transition focus:ring-2 focus:ring-[#d8c3a5]/50"
+                            className={`${fieldClass} pr-11`}
                           />
 
                           <UserRound
                             size={17}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a49a8d]"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8295A5]"
                           />
                         </div>
                       </div>
@@ -947,12 +1319,12 @@ const Profile = () => {
                       {/* Email */}
                       <div>
                         <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <label className="text-[10px] font-semibold tracking-[0.12em] text-[#81776B]">
+                          <label className="text-[10px] font-semibold tracking-[0.12em] text-[#526879]">
                             PRIMARY EMAIL
                           </label>
 
                           {profile.is_email_verified && (
-                            <span className="rounded-full bg-[#f4eddf] px-2 py-0.5 text-[9px] font-semibold text-[#8d704d]">
+                            <span className="rounded-full bg-[#EAF2F8] px-2 py-0.5 text-[9px] font-semibold text-[#426782]">
                               VERIFIED
                             </span>
                           )}
@@ -964,19 +1336,19 @@ const Profile = () => {
                               type="email"
                               value={profile.email}
                               readOnly
-                              className="h-13 w-full rounded-lg bg-[#f7f6f3] px-4 pr-10 text-sm text-[#81776B] outline-none"
+                              className={`${fieldClass} bg-[#EEF3F7] pr-10 text-[#8295A5]`}
                             />
 
                             <Mail
                               size={17}
-                              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a49a8d]"
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8295A5]"
                             />
                           </div>
 
                           <button
                             type="button"
                             onClick={() => setShowEmailModal(true)}
-                            className="shrink-0 rounded-lg border border-[#d8c3a5] px-3 text-xs font-medium text-[#8d704d] transition hover:bg-[#f7f4ef]"
+                            className="shrink-0 rounded-lg border border-[#D8E3EB] px-3 text-xs font-medium text-[#426782] transition-colors duration-200 hover:border-[#426782] hover:bg-[#EAF2F8]"
                           >
                             Change
                           </button>
@@ -987,7 +1359,7 @@ const Profile = () => {
                       <div className="md:col-span-2">
                         <label
                           htmlFor="phone"
-                          className="mb-2 block text-[10px] font-semibold tracking-[0.12em] text-[#81776B]"
+                          className="mb-2 block text-[10px] font-semibold tracking-[0.12em] text-[#526879]"
                         >
                           TELEPHONE CONTACT
                         </label>
@@ -1002,52 +1374,59 @@ const Profile = () => {
                             value={formData.phone}
                             onChange={handleChange}
                             placeholder="Enter your 10-digit phone number"
-                            className="h-13 w-full rounded-lg bg-[#f7f6f3] px-4 pr-11 text-sm text-[#29251f] outline-none transition focus:ring-2 focus:ring-[#d8c3a5]/50"
+                            className={`${fieldClass} pr-11`}
                           />
 
                           <Phone
                             size={17}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a49a8d]"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8295A5]"
                           />
                         </div>
 
-                        <p className="mt-2 text-[10px] text-[#a49a8d]">
+                        <p className="mt-2 text-[10px] text-[#8295A5]">
                           Optional · Enter exactly 10 digits if provided.
                         </p>
                       </div>
                     </div>
 
                     {/* Security section */}
-                    <div className="mt-10 border-t border-[#eee9e1] pt-8">
+                    <div className="mt-10 border-t border-[#E5EDF3] pt-8">
                       <div className="mb-5 flex items-center gap-3">
-                        <div className="rounded-lg bg-[#f5f1e9] p-2.5">
-                          <ShieldCheck size={20} className="text-[#a88962]" />
+                        <div className="rounded-lg bg-[#EAF2F8] p-2.5">
+                          <ShieldCheck
+                            size={20}
+                            className="text-[#426782]"
+                          />
                         </div>
 
                         <div>
-                          <h3 className="font-serif text-xl text-[#29251f]">
+                          <h3 className="text-xl font-semibold text-[#172B3A]">
                             Security & Account Access
                           </h3>
-                          <p className="mt-1 text-xs text-[#81776B]">
+
+                          <p className="mt-1 text-xs text-[#8295A5]">
                             Protect your account with a secure password.
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-4 rounded-xl bg-[#f7f6f3] p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-col gap-4 rounded-xl border border-[#D8E3EB] bg-[#F5F9FC] p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                          <p className="text-xs font-medium text-[#81776B]">
+                          <p className="text-xs font-medium text-[#526879]">
                             Account Passcode
                           </p>
-                          <p className="mt-1 tracking-[0.25em] text-[#29251f]">
+
+                          <p className="mt-1 tracking-[0.25em] text-[#172B3A]">
                             ••••••••••••
                           </p>
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => setShowPasswordModal(true)}
-                          className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-3 text-xs font-medium text-[#5c5143] shadow-sm transition hover:bg-[#eee9e1]"
+                          onClick={() =>
+                            setShowPasswordModal(true)
+                          }
+                          className="inline-flex items-center justify-center gap-2 rounded-full bg-[#172B3A] px-5 py-3 text-xs font-medium text-white transition-colors duration-200 hover:bg-[#426782]"
                         >
                           <LockKeyhole size={15} />
                           Update Password
@@ -1058,12 +1437,12 @@ const Profile = () => {
 
                   {/* Save and discard */}
                   {isDirty && (
-                    <div className="flex flex-col-reverse justify-end gap-3 border-t border-[#eee9e1] bg-[#fcfbf9] px-6 py-5 sm:flex-row sm:px-9">
+                    <div className="flex flex-col-reverse justify-end gap-3 border-t border-[#E5EDF3] bg-[#F5F9FC] px-6 py-5 sm:flex-row sm:px-9">
                       <button
                         type="button"
                         onClick={handleDiscard}
                         disabled={saving}
-                        className="rounded-full bg-[#f0eee9] px-7 py-3 text-xs font-medium text-[#5c5143] transition hover:bg-[#e8e5de] disabled:opacity-50"
+                        className={secondaryButtonClass}
                       >
                         Discard
                       </button>
@@ -1071,7 +1450,7 @@ const Profile = () => {
                       <button
                         type="submit"
                         disabled={saving}
-                        className="inline-flex items-center justify-center gap-2 rounded-full bg-[#29251f] px-7 py-3 text-xs font-medium text-white transition hover:bg-[#494239] disabled:opacity-50"
+                        className={primaryButtonClass}
                       >
                         <CheckCircle2 size={15} />
                         {saving ? "Saving..." : "Save Changes"}
@@ -1085,56 +1464,6 @@ const Profile = () => {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="mt-16 border-t border-[#eee9e1] bg-white">
-        <div className="mx-auto grid max-w-[1440px] grid-cols-2 gap-8 px-6 py-12 sm:grid-cols-4 lg:px-10">
-          <div>
-            <h3 className="font-serif text-2xl tracking-wide text-[#29251f]">
-              SPEQ
-            </h3>
-            <p className="mt-3 max-w-[220px] text-xs leading-6 text-[#81776B]">
-              Thoughtfully designed eyewear for the modern individual.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#29251f]">
-              Explore
-            </h4>
-            <ul className="mt-4 space-y-3 text-xs text-[#81776B]">
-              <li>Eyeglasses</li>
-              <li>Sunglasses</li>
-              <li>Collections</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#29251f]">
-              Customer Care
-            </h4>
-            <ul className="mt-4 space-y-3 text-xs text-[#81776B]">
-              <li>Contact</li>
-              <li>Shipping & Returns</li>
-              <li>Privacy Policy</li>
-            </ul>
-          </div>
-
-          <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-[#29251f]">
-              My Account
-            </h4>
-            <ul className="mt-4 space-y-3 text-xs text-[#81776B]">
-              <li>Account Information</li>
-              <li>My Orders</li>
-              <li>Address Book</li>
-            </ul>
-          </div>
-        </div>
-
-        <div className="border-t border-[#eee9e1] px-6 py-5 text-center text-[10px] text-[#a49a8d]">
-          © {new Date().getFullYear()} SpeQ Eyewear. All rights reserved.
-        </div>
-      </footer>
 
       {/* EMAIL CHANGE MODAL */}
       {showEmailModal && (
@@ -1146,7 +1475,7 @@ const Profile = () => {
           <div className="space-y-4">
             {emailStep === 1 && (
               <>
-                <label className="block text-xs font-medium text-[#81776B]">
+                <label className="block text-xs font-medium text-[#526879]">
                   NEW EMAIL ADDRESS
                 </label>
 
@@ -1155,24 +1484,27 @@ const Profile = () => {
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                   placeholder="Enter your new email"
-                  className="w-full rounded-lg bg-[#f7f6f3] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#d8c3a5]/50"
+                  className={fieldClass}
                 />
 
                 <button
                   type="button"
                   onClick={handleEmailRequest}
                   disabled={emailLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
-                  {emailLoading ? "Sending..." : "Send Verification OTP"}
+                  {emailLoading
+                    ? "Sending..."
+                    : "Send Verification OTP"}
                 </button>
               </>
             )}
 
             {emailStep === 2 && (
               <>
-                <p className="text-sm text-[#81776B]">
-                  Enter the 6-digit code sent to <strong>{newEmail}</strong>.
+                <p className="text-sm text-[#8295A5]">
+                  Enter the 6-digit code sent to{" "}
+                  <strong className="text-[#172B3A]">{newEmail}</strong>.
                 </p>
 
                 <input
@@ -1181,29 +1513,39 @@ const Profile = () => {
                   maxLength={6}
                   value={emailOtp}
                   onChange={(e) =>
-                    setEmailOtp(e.target.value.replace(/\D/g, ""))
+                    setEmailOtp(
+                      e.target.value.replace(/\D/g, "")
+                    )
                   }
                   placeholder="000000"
-                  className="w-full rounded-lg bg-[#f7f6f3] px-4 py-3 text-center text-xl tracking-[0.4em] outline-none focus:ring-2 focus:ring-[#d8c3a5]/50"
+                  className={`${fieldClass} text-center text-xl tracking-[0.4em]`}
                 />
 
-                <div className="otp-resend-section">
+                <div className="rounded-lg bg-[#F5F9FC] p-3 text-center text-xs text-[#526879]">
                   {emailOtpTimeLeft > 0 ? (
                     <p>
-                      Resend OTP in <strong>{emailOtpTimeLeft}s</strong>
+                      Resend OTP in{" "}
+                      <strong className="text-[#172B3A]">
+                        {emailOtpTimeLeft}s
+                      </strong>
                     </p>
                   ) : (
                     <button
                       type="button"
                       onClick={handleResendEmailOtp}
                       disabled={isResendingEmailOtp}
+                      className="font-semibold text-[#426782] transition-colors hover:text-[#172B3A] disabled:opacity-50"
                     >
-                      {isResendingEmailOtp ? "SENDING..." : "RESEND OTP"}
+                      {isResendingEmailOtp
+                        ? "SENDING..."
+                        : "RESEND OTP"}
                     </button>
                   )}
 
                   {emailOtpResendMessage && (
-                    <p className="field-error">{emailOtpResendMessage}</p>
+                    <p className="mt-2 text-[#526879]">
+                      {emailOtpResendMessage}
+                    </p>
                   )}
                 </div>
 
@@ -1211,7 +1553,7 @@ const Profile = () => {
                   type="button"
                   onClick={handleEmailVerify}
                   disabled={emailLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
                   {emailLoading ? "Verifying..." : "Verify OTP"}
                 </button>
@@ -1220,12 +1562,17 @@ const Profile = () => {
 
             {emailStep === 3 && (
               <>
-                <div className="rounded-xl bg-[#f5f1e9] p-4 text-center">
-                  <ShieldCheck size={30} className="mx-auto text-[#8d704d]" />
-                  <p className="mt-2 text-sm font-medium text-[#5c5143]">
+                <div className="rounded-xl border border-[#D8E3EB] bg-[#EAF2F8] p-4 text-center">
+                  <ShieldCheck
+                    size={30}
+                    className="mx-auto text-[#426782]"
+                  />
+
+                  <p className="mt-2 text-sm font-medium text-[#172B3A]">
                     New email verified
                   </p>
-                  <p className="mt-1 text-xs text-[#81776B]">
+
+                  <p className="mt-1 text-xs text-[#8295A5]">
                     Confirm to replace your current email address.
                   </p>
                 </div>
@@ -1234,15 +1581,17 @@ const Profile = () => {
                   type="button"
                   onClick={handleEmailConfirm}
                   disabled={emailLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
-                  {emailLoading ? "Updating..." : "Confirm Email Change"}
+                  {emailLoading
+                    ? "Updating..."
+                    : "Confirm Email Change"}
                 </button>
               </>
             )}
 
             {emailError && (
-              <p className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                 {emailError}
               </p>
             )}
@@ -1250,7 +1599,7 @@ const Profile = () => {
             <button
               type="button"
               onClick={closeEmailModal}
-              className="w-full py-2 text-xs text-[#81776B] underline"
+              className="w-full py-2 text-xs text-[#8295A5] transition-colors hover:text-[#172B3A]"
             >
               Cancel
             </button>
@@ -1268,9 +1617,12 @@ const Profile = () => {
           <div className="space-y-4">
             {passwordStep === 1 && (
               <>
-                <div className="rounded-xl bg-[#f7f6f3] p-4">
-                  <p className="text-xs text-[#81776B]">VERIFICATION EMAIL</p>
-                  <p className="mt-1 break-all text-sm text-[#29251f]">
+                <div className="rounded-xl border border-[#D8E3EB] bg-[#F5F9FC] p-4">
+                  <p className="text-xs text-[#8295A5]">
+                    VERIFICATION EMAIL
+                  </p>
+
+                  <p className="mt-1 break-all text-sm text-[#172B3A]">
                     {profile.email}
                   </p>
                 </div>
@@ -1279,16 +1631,18 @@ const Profile = () => {
                   type="button"
                   onClick={handlePasswordRequest}
                   disabled={passwordLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
-                  {passwordLoading ? "Sending..." : "Send Verification OTP"}
+                  {passwordLoading
+                    ? "Sending..."
+                    : "Send Verification OTP"}
                 </button>
               </>
             )}
 
             {passwordStep === 2 && (
               <>
-                <p className="text-sm text-[#81776B]">
+                <p className="text-sm text-[#8295A5]">
                   Enter the 6-digit OTP sent to your registered email.
                 </p>
 
@@ -1298,29 +1652,39 @@ const Profile = () => {
                   maxLength={6}
                   value={passwordOtp}
                   onChange={(e) =>
-                    setPasswordOtp(e.target.value.replace(/\D/g, ""))
+                    setPasswordOtp(
+                      e.target.value.replace(/\D/g, "")
+                    )
                   }
                   placeholder="000000"
-                  className="w-full rounded-lg bg-[#f7f6f3] px-4 py-3 text-center text-xl tracking-[0.4em] outline-none focus:ring-2 focus:ring-[#d8c3a5]/50"
+                  className={`${fieldClass} text-center text-xl tracking-[0.4em]`}
                 />
 
-                <div className="otp-resend-section">
+                <div className="rounded-lg bg-[#F5F9FC] p-3 text-center text-xs text-[#526879]">
                   {passwordOtpTimeLeft > 0 ? (
                     <p>
-                      Resend OTP in <strong>{passwordOtpTimeLeft}s</strong>
+                      Resend OTP in{" "}
+                      <strong className="text-[#172B3A]">
+                        {passwordOtpTimeLeft}s
+                      </strong>
                     </p>
                   ) : (
                     <button
                       type="button"
                       onClick={handleResendPasswordOtp}
                       disabled={isResendingPasswordOtp}
+                      className="font-semibold text-[#426782] transition-colors hover:text-[#172B3A] disabled:opacity-50"
                     >
-                      {isResendingPasswordOtp ? "SENDING..." : "RESEND OTP"}
+                      {isResendingPasswordOtp
+                        ? "SENDING..."
+                        : "RESEND OTP"}
                     </button>
                   )}
 
                   {passwordOtpResendMessage && (
-                    <p className="field-error">{passwordOtpResendMessage}</p>
+                    <p className="mt-2 text-[#526879]">
+                      {passwordOtpResendMessage}
+                    </p>
                   )}
                 </div>
 
@@ -1328,7 +1692,7 @@ const Profile = () => {
                   type="button"
                   onClick={handlePasswordVerify}
                   disabled={passwordLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
                   {passwordLoading ? "Verifying..." : "Verify OTP"}
                 </button>
@@ -1337,7 +1701,7 @@ const Profile = () => {
 
             {passwordStep === 3 && (
               <>
-                <label className="block text-xs font-medium text-[#81776B]">
+                <label className="block text-xs font-medium text-[#526879]">
                   NEW PASSWORD
                 </label>
 
@@ -1347,10 +1711,10 @@ const Profile = () => {
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="Enter new password"
-                  className="w-full rounded-lg bg-[#f7f6f3] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#d8c3a5]/50"
+                  className={fieldClass}
                 />
 
-                <label className="block text-xs font-medium text-[#81776B]">
+                <label className="block text-xs font-medium text-[#526879]">
                   CONFIRM NEW PASSWORD
                 </label>
 
@@ -1358,13 +1722,18 @@ const Profile = () => {
                   type="password"
                   autoComplete="new-password"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) =>
+                    setConfirmPassword(e.target.value)
+                  }
                   placeholder="Confirm new password"
-                  className="w-full rounded-lg bg-[#f7f6f3] px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#d8c3a5]/50"
+                  className={fieldClass}
                 />
 
-                <div className="rounded-lg bg-[#f7f6f3] p-3 text-[11px] leading-6 text-[#81776B]">
-                  <p>Password requirements:</p>
+                <div className="rounded-lg border border-[#D8E3EB] bg-[#F5F9FC] p-3 text-[11px] leading-6 text-[#526879]">
+                  <p className="font-semibold text-[#172B3A]">
+                    Password requirements:
+                  </p>
+
                   <ul className="list-disc pl-5">
                     <li>Minimum 8 characters</li>
                     <li>At least one uppercase letter</li>
@@ -1378,15 +1747,17 @@ const Profile = () => {
                   type="button"
                   onClick={handleSetNewPassword}
                   disabled={passwordLoading}
-                  className="w-full rounded-full bg-[#29251f] py-3 text-sm text-white disabled:opacity-50"
+                  className={`w-full ${primaryButtonClass}`}
                 >
-                  {passwordLoading ? "Updating..." : "Update Password"}
+                  {passwordLoading
+                    ? "Updating..."
+                    : "Update Password"}
                 </button>
               </>
             )}
 
             {passwordError && (
-              <p className="rounded-lg bg-red-50 p-3 text-xs text-red-700">
+              <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700">
                 {passwordError}
               </p>
             )}
@@ -1394,7 +1765,7 @@ const Profile = () => {
             <button
               type="button"
               onClick={closePasswordModal}
-              className="w-full py-2 text-xs text-[#81776B] underline"
+              className="w-full py-2 text-xs text-[#8295A5] transition-colors hover:text-[#172B3A]"
             >
               Cancel
             </button>

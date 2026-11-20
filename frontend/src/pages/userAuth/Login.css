@@ -1,0 +1,658 @@
+
+/* =========================================
+   SPEQ EYEWEAR — LOGIN PAGE
+   Arctic Premium Theme
+   Shared layout: Auth.css
+========================================= */
+
+/* =========================================
+   THEME VARIABLES
+========================================= */
+
+.signup-page {
+  --login-navy: #172B3A;
+  --login-blue: #426782;
+  --login-muted: #8295A5;
+  --login-bg: #EAF2F8;
+  --login-slate: #263B4B;
+  --login-accent: #C5AE87;
+  --login-border: rgba(66, 103, 130, 0.18);
+  --login-white: #FFFFFF;
+}
+
+/* =========================================
+   MAIN SECTION
+========================================= */
+
+.signup-page .login-main {
+  width: 100%;
+  padding: 0 0 35px;
+}
+
+/* =========================================
+   LEFT PANEL
+========================================= */
+
+.signup-left .left-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 15px;
+
+  color: var(--login-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+}
+
+.signup-left .left-content {
+  margin-top: auto;
+  margin-bottom: 30px;
+}
+
+.signup-left .left-content h2 {
+  max-width: 500px;
+  margin: 0;
+
+  color: #FFFFFF;
+  font-family: Georgia, serif;
+  font-size: clamp(32px, 3.5vw, 46px);
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.25;
+}
+
+.signup-left .gold-underline {
+  width: 75px;
+  height: 2px;
+  margin: 22px 0 18px;
+  background: var(--login-accent);
+}
+
+.signup-left .left-content p {
+  color: var(--login-accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  line-height: 1.7;
+}
+
+/* =========================================
+   PRIVILEGES — IF USED IN JSX
+========================================= */
+
+.signup-left .privileges-card {
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(12px);
+}
+
+.signup-left .privileges-list {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.signup-left .privileges-list div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  color: #FFFFFF;
+  font-family: Georgia, serif;
+  font-size: 13px;
+}
+
+.signup-left .privileges-list svg {
+  flex-shrink: 0;
+  color: var(--login-accent);
+  stroke-width: 1.4;
+}
+
+/* =========================================
+   LOGIN FORM
+========================================= */
+
+.signup-right .signup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+/* Input wrapper */
+
+.signup-right .input-wrapper {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+
+  padding: 0 14px;
+
+  border: 1px solid var(--login-border);
+  border-radius: 7px;
+
+  background: rgba(234, 242, 248, 0.55);
+  color: var(--login-slate);
+
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.signup-right .input-wrapper:focus-within {
+  border-color: var(--login-blue);
+  background: #FFFFFF;
+
+  box-shadow:
+    0 0 0 3px rgba(66, 103, 130, 0.09),
+    0 5px 16px rgba(23, 43, 58, 0.05);
+}
+
+.signup-right .input-wrapper > svg {
+  flex-shrink: 0;
+  color: var(--login-blue);
+  stroke-width: 1.7;
+}
+
+.signup-right .input-wrapper input {
+  width: 100%;
+  min-width: 0;
+  height: 50px;
+
+  padding: 0;
+  border: none;
+  outline: none;
+
+  background: transparent;
+  color: var(--login-navy);
+
+  font-family: inherit;
+  font-size: 13px;
+
+  box-shadow: none;
+}
+
+.signup-right .input-wrapper input:focus {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.signup-right .input-wrapper input::placeholder {
+  color: var(--login-muted);
+  opacity: 0.85;
+}
+
+/* =========================================
+   PASSWORD LABEL
+========================================= */
+
+.signup-right .password-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.signup-right .password-label a,
+.signup-right .password-label .forgot-password-link {
+  color: var(--login-blue);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.signup-right .password-label a:hover,
+.signup-right .password-label .forgot-password-link:hover {
+  color: var(--login-navy);
+  text-decoration: underline;
+}
+
+/* Forgot password is a button in Login.jsx */
+
+.signup-right .forgot-password-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Password visibility button */
+
+.signup-right .password-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 5px;
+  border: none;
+  background: transparent;
+
+  color: var(--login-muted);
+  cursor: pointer;
+
+  transition: color 0.3s ease;
+}
+
+.signup-right .password-toggle:hover {
+  color: var(--login-navy);
+}
+
+/* =========================================
+   LOGIN BUTTON
+========================================= */
+
+.signup-right .signup-submit {
+  width: 100%;
+  min-height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  margin-top: 3px;
+  padding: 15px;
+
+  border: 1px solid var(--login-navy);
+  border-radius: 7px;
+
+  background: linear-gradient(
+    135deg,
+    #263F53,
+    #172B3A
+  );
+
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+
+  cursor: pointer;
+
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    background 0.3s ease;
+}
+
+.signup-right .signup-submit:hover:not(:disabled) {
+  background: linear-gradient(
+    135deg,
+    #426782,
+    #263F53
+  );
+
+  box-shadow: 0 8px 22px rgba(23, 43, 58, 0.18);
+  transform: translateY(-2px);
+}
+
+.signup-right .signup-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.signup-right .signup-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* =========================================
+   SIGN IN / CREATE ACCOUNT TOGGLE
+========================================= */
+
+.signup-right .auth-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+
+  margin-bottom: 30px;
+  padding: 5px;
+
+  border: 1px solid var(--login-border);
+  border-radius: 8px;
+
+  background: rgba(234, 242, 248, 0.7);
+}
+
+.signup-right .auth-toggle a {
+  flex: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 14px;
+
+  border: 1px solid transparent;
+  border-radius: 6px;
+
+  color: var(--login-muted);
+  font-size: 13px;
+  text-decoration: none;
+
+  transition:
+    color 0.3s ease,
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.signup-right .auth-toggle a:hover {
+  color: var(--login-navy);
+  background: rgba(66, 103, 130, 0.08);
+}
+
+.signup-right .auth-toggle a.toggle-active {
+  color: var(--login-navy);
+  background: #FFFFFF;
+  border-color: var(--login-border);
+
+  font-weight: 700;
+
+  box-shadow: 0 3px 12px rgba(23, 43, 58, 0.07);
+}
+
+/* =========================================
+   SUCCESS MESSAGE
+========================================= */
+
+.login-success-message {
+  margin-bottom: 16px;
+  padding: 12px;
+
+  border: 1px solid rgba(39, 131, 74, 0.2);
+  border-radius: 6px;
+
+  background: rgba(39, 131, 74, 0.08);
+  color: #27834A;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* =========================================
+   GOOGLE LOGIN
+========================================= */
+
+.signup-right .social-divider {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+
+  margin: 25px 0 18px;
+}
+
+.signup-right .social-divider span {
+  flex: 1;
+  height: 1px;
+  background: var(--login-border);
+}
+
+.signup-right .social-divider p {
+  margin: 0;
+
+  color: var(--login-muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+
+.signup-right .google-login {
+  width: 100%;
+  min-height: 52px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+
+  padding: 12px;
+
+  border: 1px solid var(--login-border);
+  border-radius: 7px;
+
+  background: #FFFFFF;
+  color: var(--login-slate);
+
+  font-family: inherit;
+  font-size: 13px;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.signup-right .google-login:hover {
+  border-color: var(--login-blue);
+  background: var(--login-bg);
+  box-shadow: 0 4px 14px rgba(23, 43, 58, 0.06);
+}
+
+.signup-right .google-icon {
+  color: #4285F4;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+/* =========================================
+   LOGIN FOOTER
+========================================= */
+
+.login-footer {
+  padding: 35px 6% 0;
+
+  border-top: 1px solid var(--login-border);
+  background: #F5F8FB;
+}
+
+.footer-main {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr 1fr;
+  gap: 40px;
+
+  padding-bottom: 30px;
+}
+
+.footer-logo {
+  color: var(--login-navy);
+  font-family: Georgia, serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 5px;
+  text-decoration: none;
+}
+
+.footer-brand p {
+  margin-top: 8px;
+
+  color: var(--login-muted);
+  font-family: Georgia, serif;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.footer-column {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.footer-column h3 {
+  margin: 0 0 5px;
+
+  color: var(--login-navy);
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+
+.footer-column a {
+  width: fit-content;
+
+  color: var(--login-muted);
+  font-size: 11px;
+  line-height: 1.6;
+  text-decoration: none;
+
+  transition: color 0.3s ease;
+}
+
+.footer-column a:hover {
+  color: var(--login-blue);
+}
+
+.footer-bottom {
+  min-height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 20px;
+
+  border-top: 1px solid var(--login-border);
+}
+
+.footer-bottom p,
+.footer-bottom a {
+  color: var(--login-muted);
+  font-size: 10px;
+}
+
+.footer-bottom p {
+  margin: 0;
+}
+
+.footer-bottom div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+
+.footer-bottom a {
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footer-bottom a:hover {
+  color: var(--login-navy);
+}
+
+/* =========================================
+   ACCESSIBILITY
+========================================= */
+
+.signup-page .forgot-password-link:focus-visible,
+.signup-page .password-toggle:focus-visible,
+.signup-page .signup-submit:focus-visible,
+.signup-page .auth-toggle a:focus-visible,
+.login-footer a:focus-visible {
+  outline: 2px solid var(--login-blue);
+  outline-offset: 3px;
+}
+
+/* =========================================
+   TABLET
+========================================= */
+
+@media (max-width: 1000px) {
+  .footer-main {
+    gap: 25px;
+  }
+}
+
+/* =========================================
+   MOBILE
+========================================= */
+
+@media (max-width: 768px) {
+  .signup-page .login-main {
+    padding: 0 0 25px;
+  }
+
+  .signup-left .left-content h2 {
+    font-size: 30px;
+  }
+
+  .signup-left .privileges-list {
+    gap: 15px;
+  }
+
+  .signup-left .privileges-list div {
+    font-size: 12px;
+  }
+
+  .footer-main {
+    grid-template-columns: 1fr 1fr;
+    gap: 30px 20px;
+  }
+
+  .footer-bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 16px 0;
+  }
+
+  .footer-bottom div {
+    gap: 14px;
+  }
+}
+
+/* =========================================
+   SMALL MOBILE
+========================================= */
+
+@media (max-width: 400px) {
+  .signup-left .left-content h2 {
+    font-size: 27px;
+  }
+
+  .signup-right .input-wrapper {
+    gap: 9px;
+    padding: 0 10px;
+  }
+
+  .signup-right .auth-toggle a {
+    padding: 12px 10px;
+    font-size: 12px;
+  }
+
+  .signup-right {
+    padding: 32px 18px;
+  }
+
+  .footer-main {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .footer-bottom div {
+    gap: 10px;
+  }
+}
+
+/* =========================================
+   REDUCED MOTION
+========================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .signup-page .signup-submit,
+  .signup-page .input-wrapper,
+  .signup-page .password-toggle,
+  .signup-page .auth-toggle a,
+  .login-footer a,
+  .signup-page .google-login {
+    transition-duration: 0.01ms;
+  }
+}

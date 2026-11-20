@@ -1,7 +1,9 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Mail, ShieldCheck, X } from "lucide-react";
+import { API_BASE } from "../../utils/api";
+
+const RECOVERY_KEY = "adminPasswordRecoverySession";
 
 const AdminForgotPassword = () => {
   const navigate = useNavigate();
@@ -12,22 +14,25 @@ const AdminForgotPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setError("");
     setLoading(true);
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/auth/admin/forgot-password/",
+        `${API_BASE}/auth/admin/forgot-password/`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({
+            email: email.trim(),
+          }),
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         throw new Error(
@@ -38,12 +43,27 @@ const AdminForgotPassword = () => {
         );
       }
 
-      navigate("/admin/verify-otp", {
-        state: { email },
-      });
+      // Save recovery metadata, not the OTP.
+      const recoverySession = {
+        purpose: "admin_password_reset",
+        step: "otp",
+        email: email.trim(),
+        expires_at: data.expires_at || null,
+        resend_available_at:
+          data.resend_available_at ||
+          new Date(Date.now() + 60000).toISOString(),
+      };
 
+      sessionStorage.setItem(
+        RECOVERY_KEY,
+        JSON.stringify(recoverySession)
+      );
+
+      navigate("/admin/verify-otp", {
+        state: { email: email.trim() },
+      });
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Unable to process your request.");
     } finally {
       setLoading(false);
     }
@@ -51,10 +71,8 @@ const AdminForgotPassword = () => {
 
   return (
     <div className="min-h-screen bg-[#FCFBF9] flex items-center justify-center px-5">
-
       <div className="relative w-full max-w-md bg-white border border-[#EDEAE4] rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.06)] p-8 md:p-10">
 
-        {/* Close button */}
         <button
           onClick={() => navigate("/admin/login")}
           className="absolute top-5 right-5 text-gray-400 hover:text-gray-700"
@@ -63,14 +81,12 @@ const AdminForgotPassword = () => {
           <X size={20} />
         </button>
 
-        {/* Icon */}
         <div className="flex justify-center mb-6">
           <div className="w-14 h-14 rounded-full bg-[#F3F5F1] flex items-center justify-center">
             <Mail size={26} className="text-[#1B3B2B]" />
           </div>
         </div>
 
-        {/* Heading */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
             <ShieldCheck size={16} className="text-[#1B3B2B]" />
@@ -89,9 +105,7 @@ const AdminForgotPassword = () => {
           </p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Admin Email Address
@@ -120,10 +134,8 @@ const AdminForgotPassword = () => {
           >
             {loading ? "Sending OTP..." : "Send Verification OTP"}
           </button>
-
         </form>
 
-        {/* Back to login */}
         <button
           onClick={() => navigate("/admin/login")}
           className="flex items-center justify-center gap-2 w-full mt-6 text-sm text-gray-500 hover:text-[#1B3B2B]"
@@ -131,7 +143,6 @@ const AdminForgotPassword = () => {
           <ArrowLeft size={16} />
           Back to Admin Login
         </button>
-
       </div>
     </div>
   );

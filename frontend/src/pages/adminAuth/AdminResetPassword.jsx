@@ -1,6 +1,5 @@
-
-import React, { useState, useEffect } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Lock,
   Eye,
@@ -9,13 +8,27 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+import { API_BASE } from "../../utils/api";
+
+const RECOVERY_KEY = "adminPasswordRecoverySession";
+
+const getRecoverySession = () => {
+  try {
+    const stored = sessionStorage.getItem(RECOVERY_KEY);
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    sessionStorage.removeItem(RECOVERY_KEY);
+    return null;
+  }
+};
+
 const AdminResetPassword = () => {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  // Receive email and reset token from OTP verification.
-  const email = location.state?.email || "";
-  const resetToken = location.state?.reset_token || "";
+  const [recoverySession] = useState(() => getRecoverySession());
+
+  const email = recoverySession?.email || "";
+  const resetToken = recoverySession?.reset_token || "";
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -28,14 +41,31 @@ const AdminResetPassword = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Redirect if recovery information is missing.
+  // Restore and validate the recovery session.
   useEffect(() => {
-    if (!email || !resetToken) {
+    const session = getRecoverySession();
+
+    if (
+      !session ||
+      session.purpose !== "admin_password_reset" ||
+      session.step !== "reset" ||
+      !session.email ||
+      !session.reset_token
+    ) {
+      navigate("/admin/forgot-password", { replace: true });
+      return;
+    }
+
+    // Check expiry if the backend supplied it.
+    if (
+      session.reset_token_expires_at &&
+      Date.parse(session.reset_token_expires_at) <= Date.now()
+    ) {
+      sessionStorage.removeItem(RECOVERY_KEY);
       navigate("/admin/forgot-password", { replace: true });
     }
-  }, [email, resetToken, navigate]);
+  }, [navigate]);
 
-  // Validate password requirements.
   const validateForm = () => {
     const newErrors = {};
 
@@ -69,7 +99,6 @@ const AdminResetPassword = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Submit the new password.
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -84,7 +113,7 @@ const AdminResetPassword = () => {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/auth/admin/reset-password/",
+        `${API_BASE}/auth/admin/reset-password/`,
         {
           method: "POST",
           headers: {
@@ -99,7 +128,7 @@ const AdminResetPassword = () => {
         }
       );
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
         const getErrorMessages = (value) => {
@@ -141,33 +170,41 @@ const AdminResetPassword = () => {
         return;
       }
 
+      // Clear the temporary recovery session after success.
+      sessionStorage.removeItem(RECOVERY_KEY);
+
       setSuccess("Your admin password has been reset successfully.");
 
-      // Redirect to admin login after successful reset.
+      // Clear password fields.
+      setNewPassword("");
+      setConfirmPassword("");
+
       setTimeout(() => {
         navigate("/admin/login", { replace: true });
       }, 1800);
 
-    } catch (err) {
+    } catch {
       setError("Unable to connect to the server. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleBackToLogin = () => {
+    sessionStorage.removeItem(RECOVERY_KEY);
+    navigate("/admin/login");
+  };
+
   return (
     <div className="min-h-screen bg-[#FCFBF9] flex items-center justify-center px-5">
-
       <div className="w-full max-w-md bg-white border border-[#EDEAE4] rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.06)] p-8 md:p-10">
 
-        {/* Security icon */}
         <div className="flex justify-center mb-6">
           <div className="w-14 h-14 rounded-full bg-[#F3F5F1] flex items-center justify-center">
-            <ShieldCheck size={27} className="text-[#1B3B2B}" />
+            <ShieldCheck size={27} className="text-[#1B3B2B]" />
           </div>
         </div>
 
-        {/* Heading */}
         <div className="text-center mb-8">
           <p className="text-xs tracking-[0.2em] text-[#1B3B2B] mb-3">
             SPEQ ADMIN SECURITY
@@ -184,7 +221,6 @@ const AdminResetPassword = () => {
 
         <form onSubmit={handleSubmit} className="space-y-5">
 
-          {/* New password */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               New Password
@@ -229,7 +265,6 @@ const AdminResetPassword = () => {
             )}
           </div>
 
-          {/* Confirm password */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Confirm New Password
@@ -279,21 +314,18 @@ const AdminResetPassword = () => {
             )}
           </div>
 
-          {/* General error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
               {error}
             </p>
           )}
 
-          {/* Success */}
           {success && (
             <p className="text-sm text-green-700 bg-green-50 p-3 rounded-lg">
               {success}
             </p>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading || !!success}
@@ -301,18 +333,16 @@ const AdminResetPassword = () => {
           >
             {loading ? "Updating Password..." : "Reset Password"}
           </button>
-
         </form>
 
         <button
           type="button"
-          onClick={() => navigate("/admin/login")}
+          onClick={handleBackToLogin}
           className="flex items-center justify-center gap-2 w-full mt-6 text-sm text-gray-500 hover:text-[#1B3B2B]"
         >
           <ArrowLeft size={16} />
           Back to Admin Login
         </button>
-
       </div>
     </div>
   );
