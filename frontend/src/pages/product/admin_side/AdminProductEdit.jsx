@@ -472,22 +472,21 @@ const AdminProductEdit = () => {
   // IMAGE HANDLERS
   // --------------------------------------------------
 
-  const handleImageUpload = (colorId, event) => {
+  const handleImageUpload = (colorLocalId, event) => {
     const selectedFiles = Array.from(event.target.files || []);
 
     if (!selectedFiles.length) return;
 
-    const currentColor = colors.find((color) => color.id === colorId);
+    // Find the correct colour using its frontend local ID.
+    const currentColor = colors.find((color) => color.localId === colorLocalId);
 
     if (!currentColor) return;
 
+    // Maximum 4 images per colour.
     const remainingSlots = 4 - currentColor.images.length;
 
     if (remainingSlots <= 0) {
-      showToast(
-        "error",
-        "Maximum 4 images allowed per colour. Remove an existing image to upload another.",
-      );
+      showToast("Maximum 4 images allowed per colour.", "error");
 
       event.target.value = "";
       return;
@@ -496,10 +495,11 @@ const AdminProductEdit = () => {
     const validFiles = [];
     const rejectedFiles = [];
 
+    // Validate selected files.
     selectedFiles.forEach((file) => {
-      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      if (!ACCEPTED_IMAGE_TYPES.includes(file.type)) {
         rejectedFiles.push(`${file.name}: Unsupported image format.`);
-      } else if (file.size > MAX_FILE_SIZE) {
+      } else if (file.size > MAX_IMAGE_SIZE) {
         rejectedFiles.push(`${file.name}: File exceeds 5 MB.`);
       } else {
         validFiles.push(file);
@@ -508,27 +508,31 @@ const AdminProductEdit = () => {
 
     if (validFiles.length > remainingSlots) {
       showToast(
+        `Only ${remainingSlots} more image(s) can be uploaded.`,
         "error",
-        `Only ${remainingSlots} more image(s) can be uploaded. Maximum is 4 per colour.`,
       );
     } else if (rejectedFiles.length > 0) {
-      showToast("error", rejectedFiles.join(" "));
+      showToast(rejectedFiles.join(" "), "error");
     }
 
+    // Create image previews.
     const newImages = validFiles.slice(0, remainingSlots).map((file) => ({
-      id: `${Date.now()}-${Math.random()}`,
+      localId: makeLocalId(),
+      id: null,
       file,
       preview: URL.createObjectURL(file),
       isPrimary: false,
+      isExisting: false,
     }));
 
     if (newImages.length > 0) {
       setColors((previous) =>
         previous.map((color) => {
-          if (color.id !== colorId) return color;
+          if (color.localId !== colorLocalId) return color;
 
           const images = [...color.images, ...newImages];
 
+          // Automatically select the first image as primary.
           if (!images.some((image) => image.isPrimary)) {
             images[0] = {
               ...images[0],
@@ -536,7 +540,10 @@ const AdminProductEdit = () => {
             };
           }
 
-          return { ...color, images };
+          return {
+            ...color,
+            images,
+          };
         }),
       );
     }

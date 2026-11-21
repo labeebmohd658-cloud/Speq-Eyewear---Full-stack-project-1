@@ -464,10 +464,10 @@ const Login = () => {
       {/* NAVBAR */}
       <nav className="signup-navbar">
         <div className="nav-links">
-          <Link to="/">Boutique</Link>
-          <Link to="/">Optical</Link>
-          <Link to="/">Sunwear</Link>
-          <Link to="/">Atelier</Link>
+          <Link to="/">SunGlass</Link>
+          <Link to="/">ScreenGlass</Link>
+          <Link to="/">EyeGlass</Link>
+          <Link to="/">View All</Link>
         </div>
 
         <Link to="/" className="brand-logo">
@@ -510,7 +510,7 @@ const Login = () => {
             </div>
 
             <div className="form-heading">
-              <h1>Welcome to the Atelier</h1>
+              <h1>Welcome to the SpeQ</h1>
 
               <p>
                 Access your bespoke optical prescription, wishlist, and private
@@ -541,7 +541,7 @@ const Login = () => {
               {/* EMAIL FIELD */}
               <div className="form-group">
                 <label htmlFor="email">
-                  ATELIER CLIENT ID / EMAIL
+                  SPEQ CLIENT ID / EMAIL
                 </label>
 
                 <div className="input-wrapper">
@@ -618,7 +618,7 @@ const Login = () => {
                 className="signup-submit"
                 disabled={isLoading}
               >
-                {isLoading ? "SIGNING IN..." : "ENTER THE ATELIER"}
+                {isLoading ? "SIGNING IN..." : "ENTER THE SPEQ"}
                 {!isLoading && <ArrowRight size={18} />}
               </button>
             </form>
@@ -685,7 +685,7 @@ const Login = () => {
             >
               <div className="recovery-label">
                 <label htmlFor="recovery-email">
-                  ATELIER CLIENT ID / EMAIL
+                  SpeQ CLIENT ID / EMAIL
                 </label>
 
                 <span>Private Registry</span>
@@ -839,7 +839,7 @@ const Login = () => {
               onClick={closeRecoveryModal}
             >
               <ArrowLeft size={16} />
-              Back to Atelier Sign In
+              Back to SpeQ Sign In
             </button>
           </div>
         </div>

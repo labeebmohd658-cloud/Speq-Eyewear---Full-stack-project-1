@@ -415,7 +415,7 @@ const AdminProductAdd = () => {
       }
 
       if (color.images.length < 3) {
-        errors.push(`Colour ${colorNumber}: Upload at least 3 product images.`);
+        messages.push(`Colour ${index + 1}: Upload at least 3 product images.`);
       } else if (color.images.length > 4) {
         errors.push(
           `Colour ${colorNumber}: You can upload a maximum of 4 product images.`,
